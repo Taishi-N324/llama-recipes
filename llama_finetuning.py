@@ -53,6 +53,16 @@ def main(**kwargs):
     torch.cuda.manual_seed(train_config.seed)
     torch.manual_seed(train_config.seed)
 
+    # Distributed args.
+    if train_config.use_mpi:
+        global_rank = int(os.getenv('OMPI_COMM_WORLD_RANK', 0))
+        local_rank = int(os.getenv('OMPI_COMM_WORLD_LOCAL_RANK', 0))
+        world_size = int(os.getenv('OMPI_COMM_WORLD_SIZE', 1))
+
+        os.environ['RANK'] = str(global_rank)
+        os.environ['LOCAL_RANK'] = str(local_rank)
+        os.environ['WORLD_SIZE'] = str(world_size)
+
     if train_config.enable_fsdp:
         setup()
         # torchrun specific
@@ -60,10 +70,10 @@ def main(**kwargs):
         rank = int(os.environ["RANK"])
         world_size = int(os.environ["WORLD_SIZE"])
 
-    if torch.distributed.is_initialized():
-        torch.cuda.set_device(local_rank)
-        clear_gpu_cache(local_rank)
-        setup_environ_flags(rank)
+    if torch.distributed.is_initialized():  # type: ignore
+        torch.cuda.set_device(local_rank)  # type: ignore
+        clear_gpu_cache(local_rank)  # type: ignore
+        setup_environ_flags(rank)  # type: ignore
 
     # Load the pre-trained model and setup its configuration
     if train_config.enable_fsdp and train_config.low_cpu_fsdp:
@@ -103,10 +113,10 @@ def main(**kwargs):
         """
         try:
             from optimum.bettertransformer import BetterTransformer
-            model = BetterTransformer.transform(model) 
+            model = BetterTransformer.transform(model)
         except ImportError:
             print("Module 'optimum' not found. Please install 'optimum' it before proceeding.")
-    print_model_size(model, train_config, rank if train_config.enable_fsdp else 0)
+    print_model_size(model, train_config, rank if train_config.enable_fsdp else 0)  # type: ignore
 
     # Prepare the model for int8 training if quantization is enabled
     if train_config.quantization:
@@ -129,7 +139,7 @@ def main(**kwargs):
         model = get_peft_model(model, peft_config)
         model.print_trainable_parameters()
 
-    #setting up FSDP if enable_fsdp is enabled
+    # setting up FSDP if enable_fsdp is enabled
     if train_config.enable_fsdp:
         if not train_config.use_peft and train_config.freeze_layers:
 
@@ -156,7 +166,7 @@ def main(**kwargs):
 
     dataset_config = generate_dataset_config(train_config, kwargs)
 
-     # Load and preprocess the dataset for training and validation
+    # Load and preprocess the dataset for training and validation
     dataset_train = get_preprocessed_dataset(
         tokenizer,
         dataset_config,
