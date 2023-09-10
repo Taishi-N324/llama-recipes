@@ -1,3 +1,9 @@
 {
-  "cSpell.words": ["finetuning", "fugaku", "Sharded", "tflops"]
+  "cSpell.words": ["finetuning", "fugaku", "Sharded", "tflops"],
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/.env/*/**": true
+  }
+
 }
