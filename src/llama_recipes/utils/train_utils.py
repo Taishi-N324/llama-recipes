@@ -3,6 +3,7 @@
 
 import os
 import time
+from sympy import sequence
 import yaml
 from pathlib import Path
 from pkg_resources import packaging
@@ -15,7 +16,6 @@ from torch.distributed.fsdp import StateDictType
 from torch.distributed.fsdp.sharded_grad_scaler import ShardedGradScaler
 from tqdm import tqdm
 from transformers import LlamaTokenizer
-
 
 from llama_recipes.model_checkpointing import save_model_checkpoint, save_model_and_optimizer_sharded, save_optimizer_checkpoint
 from llama_recipes.policies import fpSixteen,bfSixteen_mixed, get_llama_wrapper
@@ -51,6 +51,9 @@ def train(model, train_dataloader, eval_dataloader, tokenizer, optimizer, lr_sch
 
     Returns: results dictionary containing average training and validation perplexity and loss
     """
+    # possibly unbound error 解消のため default値を設定
+    world_size: int = 1
+
     # Create a gradient scaler for fp16
     if train_config.use_fp16 and train_config.enable_fsdp:
         scaler = ShardedGradScaler()
@@ -68,6 +71,25 @@ def train(model, train_dataloader, eval_dataloader, tokenizer, optimizer, lr_sch
     results = {}
     best_val_loss = float("inf")
 
+    # set model info
+    if rank == 0 and train_config.wandb_name:
+        model_config: dict[str, typing.Any] = {}
+        model_config["activation_function"] = model.config.hidden_act
+        model_config["hidden_size"] = model.config.hidden_size
+        model_config["model_type"] = model.config.model_type
+        model_config["max_position_embeddings"] = model.config.max_position_embeddings
+        model_config["num_attention_heads"] = model.config.num_attention_heads
+        model_config["num_hidden_layers"] = model.config.num_hidden_layers
+        model_config["vocab_size"] = model.config.vocab_size
+        model_config["model_architecture"] = model.config.architectures[0]
+
+        print(f"model info: {model}")
+        print(f"model config: {model.config}")
+        wandb.config.update(model_config)
+
+        # distributed training info
+        wandb.config.update({"world_size": world_size})
+
     for epoch in range(train_config.num_epochs):
         epoch_start_time = time.perf_counter()
         with MemoryTrace() as memtrace:  # track the memory usage
@@ -77,6 +99,8 @@ def train(model, train_dataloader, eval_dataloader, tokenizer, optimizer, lr_sch
             pbar = tqdm(colour="blue", desc=f"Training Epoch: {epoch}", total=total_length)
 
             for step, batch in enumerate(train_dataloader):
+                step_start_time = time.perf_counter()
+
                 for key in batch.keys():
                     if train_config.enable_fsdp:
                         batch[key] = batch[key].to(local_rank)
@@ -111,10 +135,42 @@ def train(model, train_dataloader, eval_dataloader, tokenizer, optimizer, lr_sch
                     wandb_stats["training/loss"] = loss
                     wandb_stats["training/perplexity"] = torch.exp(loss)
 
+                    # utils info
+                    print(f"batch: {batch}, type: {type(batch)}")
+                    print(f"batch['input_ids']: {batch['input_ids']}, type: {type(batch['input_ids'])}")
+                    print(f"batch['input_ids'].shape: {batch['input_ids'].shape}")
+                    batch_size: int = batch["input_ids"].shape[0]
+                    sequence_length: int = batch["input_ids"].shape[1]
+
+                    wandb_stats["utils/batch_size"] = batch_size
+                    wandb_stats["utils/global_batch_size"] = batch_size * world_size
+                    wandb_stats["utils/seq_len"] = sequence_length
+                    wandb_stats["utils/gradient_accumulation_steps"] = gradient_accumulation_steps
+                    wandb_stats["utils/epoch"] = epoch
+                    wandb_stats["utils/step"] = step
+
                     # optimizer info
                     wandb_stats["optimizer/lr"] = optimizer.param_groups[0]['lr']
 
-                    # tflops
+                    # stats
+                    step_elapsed_time = time.perf_counter() - step_start_time
+                    wandb_stats["stats/1_iteration_time"] = step_elapsed_time
+                    wandb_stats["stats/tokens_pef_sec"] = batch_size * sequence_length / step_elapsed_time * world_size
+                    wandb_stats["stats/tokens_per_sec_per_gpu"] = batch_size * sequence_length / step_elapsed_time
+
+                    checkpoint_activations_factor = 3
+                    if fsdp_config.fsdp_activation_checkpointing:  # type ignore
+                        checkpoint_activations_factor = 4
+
+                    num_layers: int = model.config.num_hidden_layers
+                    hidden_size: int = model.config.hidden_size
+                    vocab_size: int = model.config.vocab_size
+
+                    # tflops calculation
+                    flops_per_iteration: float = (24 * checkpoint_activations_factor * batch_size * sequence_length * num_layers * (hidden_size**2)) * (1. + (sequence_length / (6. * hidden_size)) + (vocab_size / (16. * num_layers * hidden_size)))
+                    tflops: float = flops_per_iteration / (step_elapsed_time * (10**12))
+                    wandb_stats["stats/tflops"] = tflops
+
                     wandb.log(wandb_stats)
 
         epoch_end_time = time.perf_counter() - epoch_start_time
