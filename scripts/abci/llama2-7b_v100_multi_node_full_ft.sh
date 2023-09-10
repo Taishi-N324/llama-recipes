@@ -60,6 +60,7 @@ mpirun -np $NUM_GPUS \
   python examples/finetuning.py \
   --enable_fsdp \
   --low_cpu_fsdp \
+  --peft_method None \
   --use_fp16 \
   --model_name /groups/gaf51217/fujii/finetune/llama2/Llama-2-7b-hf \
   --batch_size_training 2 \
