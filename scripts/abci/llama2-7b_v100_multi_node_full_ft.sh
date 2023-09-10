@@ -1,5 +1,5 @@
 #!/bin/bash
-#$ -l rt_F=8
+#$ -l rt_F=16
 #$ -l h_rt=24:00:00
 #$ -j y
 #$ -o outputs/
@@ -62,8 +62,9 @@ mpirun -np $NUM_GPUS \
   --low_cpu_fsdp \
   --use_fp16 \
   --model_name /groups/gaf51217/fujii/finetune/llama2/Llama-2-7b-hf \
-  --batch_size_training 1 \
+  --batch_size_training 2 \
   --dist_checkpoint_root_folder $CHECKPOINTS_PATH \
   --dist_checkpoint_folder fine-tuned \
-  --use-mpi \
-  --wandb_name "llama2-7b_v100_multi_node_full_finetuning"
+  --use_mpi \
+  --use_fast_kernels \
+  --wandb_name "llama2-7b_v100_multi_node_full_finetuning_fast_kernels"
