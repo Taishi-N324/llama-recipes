@@ -5,6 +5,8 @@ __pycache__
 hostfile/
 outputs/
 checkpoints/
+wandb/
+.env/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
