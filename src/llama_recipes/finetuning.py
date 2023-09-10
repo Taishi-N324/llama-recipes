@@ -8,6 +8,7 @@ import torch
 import torch.distributed as dist
 import torch.optim as optim
 import wandb
+import typing
 from peft import get_peft_model, prepare_model_for_int8_training
 from pkg_resources import packaging
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
@@ -71,7 +72,10 @@ def main(**kwargs):
     # wandb setting
     if train_config.wandb_name is not None and rank == 0:
         import datetime
-        import dataclasses
+        from llama_recipes.utils.wandb_utils import set_config
+
+        wandb_configs: dict[str, typing.Any] = {}
+        set_config(wandb_configs=wandb_configs)
 
         now = datetime.datetime.now()
         now = now.strftime("%Y-%m-%d-%H-%M-%S")
@@ -79,6 +83,7 @@ def main(**kwargs):
             "entity": "gpt-fugaku",
             "project": "llama-2-finetuning",
             "name": train_config.wandb_name,
+            "config": wandb_configs,
         }
         wandb.init(**wandb_setting)
 

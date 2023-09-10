@@ -14,7 +14,7 @@ from llama_recipes.configs import datasets, lora_config, llama_adapter_config, p
 from llama_recipes.utils.dataset_utils import DATASET_PREPROC
 
 
-def update_config(config, **kwargs):
+def update_config(config, **kwargs) -> None:
     if isinstance(config, (tuple, list)):
         for c in config:
             update_config(c, **kwargs)
