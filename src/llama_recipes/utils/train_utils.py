@@ -21,19 +21,22 @@ from llama_recipes.model_checkpointing import save_model_checkpoint, save_model_
 from llama_recipes.policies import fpSixteen,bfSixteen_mixed, get_llama_wrapper
 from llama_recipes.utils.memory_utils import MemoryTrace
 
+import typing
+import wandb
+
 
 def set_tokenizer_params(tokenizer: LlamaTokenizer):
     tokenizer.pad_token_id = 0
     tokenizer.padding_side = "left"
-    
+
 # Converting Bytes to Megabytes
 def byte2mb(x):
     return int(x / 2**20)
 
-def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_scheduler, gradient_accumulation_steps, train_config, fsdp_config=None, local_rank=None, rank=None):
+def train(model, train_dataloader, eval_dataloader, tokenizer, optimizer, lr_scheduler, gradient_accumulation_steps, train_config, fsdp_config=None, local_rank=None, rank=None):
     """
     Trains the model on the given dataloader
-    
+
     Args:
         model: The model to be trained
         train_dataloader: The dataloader containing the training data
@@ -45,37 +48,41 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
         train_config: The training configuration
         eval_dataloader: The dataloader containing the eval data
         tokenizer: tokenizer used in the eval for decoding the predicitons
-    
+
     Returns: results dictionary containing average training and validation perplexity and loss
     """
     # Create a gradient scaler for fp16
     if train_config.use_fp16 and train_config.enable_fsdp:
         scaler = ShardedGradScaler()
     elif train_config.use_fp16 and not train_config.enable_fsdp:
-        scaler = torch.cuda.amp.GradScaler() 
+        scaler = torch.cuda.amp.GradScaler()
     if train_config.enable_fsdp:
-        world_size = int(os.environ["WORLD_SIZE"]) 
+        world_size = int(os.environ["WORLD_SIZE"])
+
     train_prep = []
     train_loss = []
     val_prep = []
-    val_loss =[]
+    val_loss = []
     epoch_times = []
     checkpoint_times = []
     results = {}
     best_val_loss = float("inf")
+
     for epoch in range(train_config.num_epochs):
         epoch_start_time = time.perf_counter()
         with MemoryTrace() as memtrace:  # track the memory usage
             model.train()
             total_loss = 0.0
-            total_length = len(train_dataloader)//gradient_accumulation_steps
+            total_length = len(train_dataloader) // gradient_accumulation_steps
             pbar = tqdm(colour="blue", desc=f"Training Epoch: {epoch}", total=total_length)
+
             for step, batch in enumerate(train_dataloader):
                 for key in batch.keys():
                     if train_config.enable_fsdp:
                         batch[key] = batch[key].to(local_rank)
                     else:
-                        batch[key] = batch[key].to('cuda:0')              
+                        batch[key] = batch[key].to('cuda:0')
+
                 loss = model(**batch).loss
                 loss = loss / gradient_accumulation_steps
                 total_loss += loss.detach().float()
@@ -94,11 +101,24 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
                         optimizer.step()
                         optimizer.zero_grad()
                         pbar.update(step//gradient_accumulation_steps)
-                
+
                 pbar.set_description(f"Training Epoch: {epoch}/{train_config.num_epochs}, step {step}/{len(train_dataloader)} completed (loss: {loss.detach().float()})")
-                
-        epoch_end_time = time.perf_counter()-epoch_start_time
-        epoch_times.append(epoch_end_time)    
+
+                if rank == 0 and train_config.wandb_name:
+                    wandb_stats: dict[str, typing.Any] = {}
+
+                    # training info
+                    wandb_stats["training/loss"] = loss
+                    wandb_stats["training/perplexity"] = torch.exp(loss)
+
+                    # optimizer info
+                    wandb_stats["optimizer/lr"] = optimizer.param_groups[0]['lr']
+
+                    # tflops
+                    wandb.log(wandb_stats)
+
+        epoch_end_time = time.perf_counter() - epoch_start_time
+        epoch_times.append(epoch_end_time)
         # Reducing total_loss across all devices if there's more than one CUDA device
         if torch.cuda.device_count() > 1 and train_config.enable_fsdp:
             dist.all_reduce(total_loss, op=dist.ReduceOp.SUM)
@@ -106,12 +126,12 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
         if train_config.enable_fsdp:
             train_epoch_loss = train_epoch_loss/world_size
         train_perplexity = torch.exp(train_epoch_loss)
-        
+
         train_prep.append(train_perplexity)
         train_loss.append(train_epoch_loss)
-        
+
         if train_config.enable_fsdp:
-            if rank==0:
+            if rank == 0:
                 print(f"Max CUDA memory allocated was {memtrace.peak} GB")
                 print(f"Max CUDA memory reserved was {memtrace.max_reserved} GB")
                 print(f"Peak active CUDA memory was {memtrace.peak_active_gb} GB")
@@ -201,23 +221,23 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
         results['avg_eval_loss'] = avg_eval_loss
     results["avg_epoch_time"] = avg_epoch_time
     results["avg_checkpoint_time"] = avg_checkpoint_time
-    
+
     #saving the training params including fsdp setting for reference.
     if train_config.enable_fsdp and not train_config.use_peft:
         save_train_params(train_config, fsdp_config, rank)
-        
+
     return results
 
 def evaluation(model,train_config, eval_dataloader, local_rank, tokenizer):
     """
     Evaluates the model on the given dataloader
-    
+
     Args:
         model: The model to evaluate
         eval_dataloader: The dataloader containing the evaluation data
         local_rank: The rank of the current node in a distributed setting
         tokenizer: The tokenizer used to decode predictions
-    
+
     Returns: eval_ppl, eval_epoch_loss
     """
     if train_config.enable_fsdp:
@@ -243,39 +263,39 @@ def evaluation(model,train_config, eval_dataloader, local_rank, tokenizer):
             eval_preds.extend(
                 tokenizer.batch_decode(preds.detach().cpu().numpy(), skip_special_tokens=True)
             )
-    
+
     # If there's more than one CUDA device, reduce evaluation loss across all devices
     if torch.cuda.device_count() > 1 and train_config.enable_fsdp:
         dist.all_reduce(eval_loss, op=dist.ReduceOp.SUM)
-    
+
     # Compute average loss and perplexity
     eval_epoch_loss = eval_loss / len(eval_dataloader)
     if train_config.enable_fsdp:
         eval_epoch_loss = eval_epoch_loss/world_size
     eval_ppl = torch.exp(eval_epoch_loss)
-    
+
     # Print evaluation metrics
     if train_config.enable_fsdp:
-        if local_rank==0:
+        if local_rank == 0:
             print(f" {eval_ppl=} {eval_epoch_loss=}")
     else:
         print(f" {eval_ppl=} {eval_epoch_loss=}")
-        
+
     return eval_ppl, eval_epoch_loss
 
 def freeze_transformer_layers(model, num_layer):
-   for i, layer in enumerate(model.model.layers):
-            if i < num_layer:
-                for param in layer.parameters():
-                    param.requires_grad = False
+    for i, layer in enumerate(model.model.layers):
+        if i < num_layer:
+            for param in layer.parameters():
+                param.requires_grad = False
 
 
 def check_frozen_layers_peft_model(model):
-     for i, layer in enumerate(model.base_model.model.model.layers):
-            for name, param in layer.named_parameters():
-                print(f"Layer {i}, parameter {name}: requires_grad = {param.requires_grad}")
-                
-                
+    for i, layer in enumerate(model.base_model.model.model.layers):
+        for name, param in layer.named_parameters():
+            print(f"Layer {i}, parameter {name}: requires_grad = {param.requires_grad}")
+
+
 def setup():
     """Initialize the process group for distributed training"""
     dist.init_process_group("nccl")
@@ -288,9 +308,9 @@ def setup_environ_flags(rank):
     # os.environ["TORCH_DISTRIBUTED_DEBUG"] = "DETAIL"
     # This flag will help with CUDA memory fragmentations that can lead into OOM in some cases.
     # Note this is only availble in PyTorch Nighlies (as of July 30 2023)
-    # os.environ['PYTORCH_CUDA_ALLOC_CONF']='expandable_segments:True' 
+    # os.environ['PYTORCH_CUDA_ALLOC_CONF']='expandable_segments:True'
     if rank == 0:
-        print(f"--> Running with torch dist debug set to detail")
+        print("--> Running with torch dist debug set to detail")
 
 
 def cleanup():
@@ -301,7 +321,7 @@ def cleanup():
 def clear_gpu_cache(rank=None):
     """Clear the GPU cache for all ranks"""
     if rank == 0:
-        print(f"Clearing GPU cache for all ranks")
+        print("Clearing GPU cache for all ranks")
     torch.cuda.empty_cache()
 
 
@@ -329,19 +349,16 @@ def print_model_size(model, config, rank: int = 0) -> None:
         print(f"\n--> {config.model_name} has {total_params / 1e6} Million params\n")
 
 
-
-
 def get_policies(cfg, rank):
     """Get the policies for mixed precision and fsdp wrapping"""
-    
-    verify_bfloat_support = (
-    torch.version.cuda
-    and torch.cuda.is_bf16_supported()
-    and packaging.version.parse(torch.version.cuda).release >= (11, 0)
-    and dist.is_nccl_available()
-    and nccl.version() >= (2, 10)
-    )
 
+    verify_bfloat_support = (
+        torch.version.cuda
+        and torch.cuda.is_bf16_supported()
+        and packaging.version.parse(torch.version.cuda).release >= (11, 0)
+        and dist.is_nccl_available()
+        and nccl.version() >= (2, 10)
+    )
 
     mixed_precision_policy = None
     wrapping_policy = None

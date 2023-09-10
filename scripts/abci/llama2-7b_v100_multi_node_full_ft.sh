@@ -13,8 +13,8 @@ module load nccl/2.16/2.16.2-1
 module load hpcx/2.12
 
 # swich virtual env
-cd /groups/gaf51217/fujii/finetune/llama-recipes
-source .venv/bin/activate
+cd /home/acf15649kv/work/finetune/llama-recipes
+source .env/bin/activate
 
 # distributed settings
 export MASTER_ADDR=$(/usr/sbin/ip a show dev bond0 | grep 'inet ' | awk '{ print $2 }' | cut -d "/" -f 1)
@@ -43,7 +43,10 @@ export NCCL_DEBUG_SUBSYS=WARN
 export PYTHONFAULTHANDLER=1
 export CUDA_LAUNCH_BLOCKING=0
 
-CHECKPOINTS_PATH=/groups/gaf51217/fujii/finetune/llama-recipes/checkpoints/llama-2-7b
+CHECKPOINTS_PATH=/groups/gaf51217/fujii/checkpoints/llama-2-7b/llama-recipies
+
+# hugginface setting
+export HF_HOME=/scratch/$(whoami)/.cache/huggingface/
 
 mkdir -p $CHECKPOINTS_PATH
 
@@ -54,12 +57,13 @@ mpirun -np $NUM_GPUS \
   -x MASTER_PORT=$MASTER_PORT \
   -bind-to none -map-by slot \
   -x PATH \
-  python llama_finetuning.py \
+  python examples/finetuning.py \
   --enable_fsdp \
   --low_cpu_fsdp \
-  --pure_bf16 \
+  --use_fp16 \
   --model_name /groups/gaf51217/fujii/finetune/llama2/Llama-2-7b-hf \
   --batch_size_training 1 \
   --dist_checkpoint_root_folder $CHECKPOINTS_PATH \
   --dist_checkpoint_folder fine-tuned \
-  --use-mpi
+  --use-mpi \
+  --wandb_name "llama2-7b_v100_multi_node_full_finetuning"
