@@ -1,5 +1,5 @@
 #!/bin/bash
-#$ -l rt_F=64
+#$ -l rt_AF=2
 #$ -l h_rt=24:00:00
 #$ -j y
 #$ -o outputs/
@@ -24,7 +24,7 @@ echo "MASTER_ADDR=${MASTER_ADDR}"
 
 # hostfile
 NUM_NODES=$NHOSTS
-NUM_GPU_PER_NODE=4
+NUM_GPU_PER_NODE=8
 NUM_GPUS=$((${NUM_NODES} * ${NUM_GPU_PER_NODE}))
 
 mkdir -p ./hostfile
@@ -61,11 +61,12 @@ mpirun -np $NUM_GPUS \
   --enable_fsdp \
   --low_cpu_fsdp \
   --peft_method None \
-  --use_fp16 \
+  --mixed_precision True \
+  --pure_bf16 \
   --model_name /groups/gaf51217/fujii/finetune/llama2/Llama-2-7b-hf \
   --batch_size_training 4 \
   --dist_checkpoint_root_folder $CHECKPOINTS_PATH \
   --dist_checkpoint_folder fine-tuned \
   --use_mpi \
   --use_fast_kernels \
-  --wandb_name "llama2-7b_v100_multi_node_full_finetuning_fast_kernels"
+  --wandb_name "llama2-7b_a100_multi_node_full_finetuning_fast_kernels"
