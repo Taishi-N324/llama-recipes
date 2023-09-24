@@ -4,6 +4,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
+
 @dataclass
 class train_config:
     model_name: str = "PATH/to/LLAMA/7B"

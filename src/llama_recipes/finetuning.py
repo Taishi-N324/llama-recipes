@@ -10,9 +10,9 @@ import torch.optim as optim
 import wandb
 import typing
 import deepspeed  # noqa: F401
-from peft import get_peft_model, prepare_model_for_int8_training
-from pkg_resources import packaging
-from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from peft import get_peft_model, prepare_model_for_int8_training  # type: ignore
+from pkg_resources import packaging  # type: ignore
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP  # type: ignore
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DistributedSampler
 from transformers import (
@@ -32,6 +32,7 @@ from llama_recipes.utils.config_utils import (
     update_config,
 )
 from llama_recipes.utils.dataset_utils import get_preprocessed_dataset
+from llama_recipes.utils.distributed import print_rank_0
 from llama_recipes.utils.train_utils import (
     clear_gpu_cache,
     freeze_transformer_layers,
@@ -171,7 +172,8 @@ def main(**kwargs) -> None:
     # setting up FSDP if enable_fsdp is enabled
     if train_config.enable_fsdp:
         if not train_config.use_peft and train_config.freeze_layers:
-            freeze_transformer_layers(train_config.num_freeze_layers)
+            print_rank_0("NOTE: freeze transformer layers")
+            freeze_transformer_layers(model=model, num_layer=train_config.num_freeze_layers)
 
         mixed_precision_policy, wrapping_policy = get_policies(fsdp_config, rank)
         my_auto_wrapping_policy = fsdp_auto_wrap_policy(model, LlamaDecoderLayer)
@@ -193,7 +195,7 @@ def main(**kwargs) -> None:
         if fsdp_config.fsdp_activation_checkpointing:
             apply_fsdp_checkpointing(model)
     elif not train_config.quantization and not train_config.enable_fsdp:
-        model.to("cuda")
+        model.to("cuda")  # type: ignore
 
     dataset_config = generate_dataset_config(train_config, kwargs)
 
@@ -257,7 +259,7 @@ def main(**kwargs) -> None:
     # Initialize the optimizer and learning rate scheduler
     if fsdp_config.pure_bf16 and fsdp_config.optimizer == "anyprecision":
         optimizer = AnyPrecisionAdamW(
-            model.parameters(),
+            model.parameters(),  # type: ignore
             lr=train_config.lr,
             momentum_dtype=torch.bfloat16,
             variance_dtype=torch.bfloat16,
@@ -265,7 +267,7 @@ def main(**kwargs) -> None:
         )
     else:
         optimizer = optim.AdamW(
-            model.parameters(),
+            model.parameters(),  # type: ignore
             lr=train_config.lr,
             weight_decay=0.0,
         )
