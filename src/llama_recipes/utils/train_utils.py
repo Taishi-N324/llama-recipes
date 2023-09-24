@@ -5,7 +5,7 @@ import os
 import time
 import yaml
 from pathlib import Path
-from pkg_resources import packaging  # type ignore
+from pkg_resources import packaging  # type: ignore
 
 
 import torch
@@ -68,6 +68,7 @@ def train(
     """
     # possibly unbound error 解消のため default値を設定
     world_size: int = 1
+    local_rank = 0
 
     # Create a gradient scaler for fp16
     if train_config.use_fp16 and train_config.enable_fsdp:
@@ -77,13 +78,13 @@ def train(
     if train_config.enable_fsdp:
         world_size = int(os.environ["WORLD_SIZE"])
 
-    train_prep = []
-    train_loss = []
-    val_prep = []
-    val_loss = []
-    epoch_times = []
-    checkpoint_times = []
-    results = {}
+    train_prep: list[torch.Tensor] = []  # train perplexity
+    train_loss: list[float] = []  # train loss
+    val_prep: list[torch.Tensor] = []  # validation perplexity
+    val_loss: list[float] = []  # validation loss
+    epoch_times: list[float] = []
+    checkpoint_times: list[float] = []
+    results: dict[str, Any] = {}
     best_val_loss = float("inf")
 
     # set model info
@@ -109,8 +110,8 @@ def train(
         epoch_start_time = time.perf_counter()
         with MemoryTrace() as memtrace:  # track the memory usage
             model.train()
-            total_loss = 0.0
-            total_length = len(train_dataloader) // gradient_accumulation_steps
+            total_loss: float = 0.0
+            total_length: int = len(train_dataloader) // gradient_accumulation_steps
             pbar = tqdm(colour="blue", desc=f"Training Epoch: {epoch}", total=total_length)
 
             for step, batch in enumerate(train_dataloader):
@@ -129,8 +130,8 @@ def train(
                     # if fp16 is enabled, use gradient scaler to handle gradient update
                     scaler.scale(loss).backward()  # type: ignore
                     if (step + 1) % gradient_accumulation_steps == 0 or step == len(train_dataloader) - 1:
-                        scaler.step(optimizer)
-                        scaler.update()
+                        scaler.step(optimizer)  # type: ignore (suppress ubound error)
+                        scaler.update()  # type: ignore (suppress ubound error)
                         optimizer.zero_grad()
                         pbar.update(step // gradient_accumulation_steps)
                 else:
@@ -197,10 +198,10 @@ def train(
         # Reducing total_loss across all devices if there's more than one CUDA device
         if torch.cuda.device_count() > 1 and train_config.enable_fsdp:
             dist.all_reduce(total_loss, op=dist.ReduceOp.SUM)
-        train_epoch_loss = total_loss / len(train_dataloader)
+        train_epoch_loss: float = total_loss / len(train_dataloader)
         if train_config.enable_fsdp:
-            train_epoch_loss = train_epoch_loss / world_size
-        train_perplexity = torch.exp(train_epoch_loss)  # type: ignore
+            train_epoch_loss: float = train_epoch_loss / world_size
+        train_perplexity: torch.Tensor = torch.exp(train_epoch_loss)  # type: ignore
 
         train_prep.append(train_perplexity)
         train_loss.append(train_epoch_loss)
@@ -280,20 +281,20 @@ def train(
             if rank == 0:
                 print(f"Epoch {epoch+1}: train_perplexity={train_perplexity:.4f}, train_epoch_loss={train_epoch_loss:.4f}, epcoh time {epoch_end_time}s")
         else:
-            print(f"Epoch {epoch+1}: train_perplexity={train_perplexity:.4f}, train_epoch_loss={train_epoch_loss:.4f}, epcoh time {epoch_end_time}s")
-    avg_epoch_time = sum(epoch_times)/ len(epoch_times)
-    avg_checkpoint_time = sum(checkpoint_times)/ len(checkpoint_times) if len(checkpoint_times) > 0 else 0
-    avg_train_prep = sum(train_prep)/len(train_prep)
-    avg_train_loss = sum(train_loss)/len(train_loss)
+            print(f"Epoch {epoch+1}: train_perplexity={train_perplexity:.4f}, train_epoch_loss={train_epoch_loss:.4f}, epoch time {epoch_end_time}s")
+    avg_epoch_time = sum(epoch_times) / len(epoch_times)
+    avg_checkpoint_time = sum(checkpoint_times) / len(checkpoint_times) if len(checkpoint_times) > 0 else 0
+    avg_train_prep = sum(train_prep) / len(train_prep)
+    avg_train_loss = sum(train_loss) / len(train_loss)
     if train_config.run_validation:
-        avg_eval_prep = sum(val_prep)/len(val_prep) 
-        avg_eval_loss = sum(val_loss)/len(val_loss) 
+        avg_eval_prep = sum(val_prep) / len(val_prep)
+        avg_eval_loss = sum(val_loss) / len(val_loss)
 
     results['avg_train_prep'] = avg_train_prep
     results['avg_train_loss'] = avg_train_loss
     if train_config.run_validation:
-        results['avg_eval_prep'] = avg_eval_prep
-        results['avg_eval_loss'] = avg_eval_loss
+        results['avg_eval_prep'] = avg_eval_prep  # type: ignore (suppress ubound error)
+        results['avg_eval_loss'] = avg_eval_loss  # type: ignore (suppress ubound error)
     results["avg_epoch_time"] = avg_epoch_time
     results["avg_checkpoint_time"] = avg_checkpoint_time
 
@@ -304,7 +305,13 @@ def train(
     return results
 
 
-def evaluation(model, train_config, eval_dataloader, local_rank, tokenizer):
+def evaluation(
+    model,
+    train_config: Type[train_config],
+    eval_dataloader: torch.utils.data.dataloader.DataLoader,
+    local_rank: int,
+    tokenizer,
+):
     """
     Evaluates the model on the given dataloader
 
@@ -316,13 +323,16 @@ def evaluation(model, train_config, eval_dataloader, local_rank, tokenizer):
 
     Returns: eval_ppl, eval_epoch_loss
     """
+    world_size: int = 1  # suppress ubound error
     if train_config.enable_fsdp:
-        world_size = int(os.environ["WORLD_SIZE"]) 
+        world_size = int(os.environ["WORLD_SIZE"])
+
     model.eval()
     eval_preds = []
     eval_loss = 0.0  # Initialize evaluation loss
-    with MemoryTrace() as memtrace:
-        for step, batch in enumerate(tqdm(eval_dataloader,colour="green", desc="evaluating Epoch")):
+
+    with MemoryTrace() as memtrace:  # noqa: F841
+        for step, batch in enumerate(tqdm(eval_dataloader, colour="green", desc="evaluating Epoch")):
             for key in batch.keys():
                 if train_config.enable_fsdp:
                     batch[key] = batch[key].to(local_rank)
@@ -347,8 +357,8 @@ def evaluation(model, train_config, eval_dataloader, local_rank, tokenizer):
     # Compute average loss and perplexity
     eval_epoch_loss = eval_loss / len(eval_dataloader)
     if train_config.enable_fsdp:
-        eval_epoch_loss = eval_epoch_loss/world_size
-    eval_ppl = torch.exp(eval_epoch_loss)
+        eval_epoch_loss = eval_epoch_loss / world_size
+    eval_ppl = torch.exp(eval_epoch_loss)  # type: ignore
 
     # Print evaluation metrics
     if train_config.enable_fsdp:
@@ -448,13 +458,13 @@ def get_policies(cfg, rank):
         if bf16_ready and not cfg.use_fp16:
             mixed_precision_policy = bfSixteen_mixed
             if rank == 0:
-                print(f"bFloat16 enabled for mixed precision - using bfSixteen policy")
+                print("bFloat16 enabled for mixed precision - using bfSixteen policy")
         elif cfg.use_fp16:
             mixed_precision_policy = fpSixteen
             if rank == 0:
-                print(f"FP16 enabled")
+                print("FP16 enabled")
         else:
-            print(f"bFloat16 support not present. Using FP32, and not mixed precision")
+            print("bFloat16 support not present. Using FP32, and not mixed precision")
     wrapping_policy = get_llama_wrapper()
     return mixed_precision_policy, wrapping_policy
 
@@ -465,7 +475,7 @@ def save_train_params(train_config, fsdp_config, rank):
     This will be used by converter script in the inference folder to fetch the HF model name or path.
     It also would be hepful as a log for future references.
     """
-    # Convert the train_config and fsdp_config objects to dictionaries, 
+    # Convert the train_config and fsdp_config objects to dictionaries,
     # converting all values to strings to ensure they can be serialized into a YAML file
     train_config_dict = {k: str(v) for k, v in vars(train_config).items() if not k.startswith('__')}
     fsdp_config_dict = {k: str(v) for k, v in vars(fsdp_config).items() if not k.startswith('__')}
@@ -473,11 +483,11 @@ def save_train_params(train_config, fsdp_config, rank):
     train_params_dict = {**train_config_dict, **fsdp_config_dict}
     # Construct the folder name (follwoing FSDP checkpointing style) using properties of the train_config object
     folder_name = (
-    train_config.dist_checkpoint_root_folder
-    + "/"
-    + train_config.dist_checkpoint_folder
-    + "-"
-    + train_config.model_name
+        train_config.dist_checkpoint_root_folder
+        + "/"
+        + train_config.dist_checkpoint_folder
+        + "-"
+        + train_config.model_name
     )
 
     save_dir = Path.cwd() / folder_name
@@ -486,7 +496,7 @@ def save_train_params(train_config, fsdp_config, rank):
         os.makedirs(save_dir)
     # Convert the dictionary to a YAML string
     config_yaml = yaml.dump(train_params_dict, indent=4)
-    file_name = os.path.join(save_dir,'train_params.yaml')
+    file_name = os.path.join(save_dir, 'train_params.yaml')
 
     # Check if there's a directory with the same name as the file
     if os.path.isdir(file_name):
@@ -495,5 +505,5 @@ def save_train_params(train_config, fsdp_config, rank):
         # Write the YAML string to the file
         with open(file_name, 'w') as f:
             f.write(config_yaml)
-        if rank==0:
+        if rank == 0:
             print(f"training params are saved in {file_name}")
