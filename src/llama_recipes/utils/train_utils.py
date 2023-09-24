@@ -11,6 +11,7 @@ from pkg_resources import packaging  # type: ignore
 import torch
 import torch.cuda.nccl as nccl
 import torch.distributed as dist
+from torch import distributed as torch_distributed  # noqa: F401
 from torch.distributed.fsdp import StateDictType  # type: ignore
 from torch.distributed.fsdp.sharded_grad_scaler import ShardedGradScaler
 from tqdm import tqdm
@@ -112,7 +113,12 @@ def train(
             model.train()
             total_loss: float = 0.0
             total_length: int = len(train_dataloader) // gradient_accumulation_steps
-            pbar = tqdm(colour="blue", desc=f"Training Epoch: {epoch}", total=total_length)
+            pbar = tqdm(
+                colour="blue",
+                desc=f"Training Epoch: {epoch}",
+                total=total_length,
+                disable=(rank != 0)
+            )
 
             for step, batch in enumerate(train_dataloader):
                 step_start_time = time.perf_counter()
