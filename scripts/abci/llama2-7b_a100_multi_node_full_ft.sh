@@ -1,5 +1,5 @@
 #!/bin/bash
-#$ -l rt_AF=2
+#$ -l rt_AF=4
 #$ -l h_rt=24:00:00
 #$ -j y
 #$ -o outputs/
@@ -63,8 +63,9 @@ mpirun -np $NUM_GPUS \
   --peft_method None \
   --mixed_precision True \
   --pure_bf16 \
+  --num_epochs 10 \
   --model_name /groups/gaf51217/fujii/finetune/llama2/Llama-2-7b-hf \
-  --batch_size_training 4 \
+  --batch_size_training 8 \
   --dist_checkpoint_root_folder $CHECKPOINTS_PATH \
   --dist_checkpoint_folder fine-tuned \
   --use_mpi \

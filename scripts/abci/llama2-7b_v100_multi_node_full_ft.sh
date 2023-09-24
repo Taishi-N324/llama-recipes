@@ -62,6 +62,7 @@ mpirun -np $NUM_GPUS \
   --low_cpu_fsdp \
   --peft_method None \
   --use_fp16 \
+  --num_epochs 10 \
   --model_name /groups/gaf51217/fujii/finetune/llama2/Llama-2-7b-hf \
   --batch_size_training 4 \
   --dist_checkpoint_root_folder $CHECKPOINTS_PATH \
