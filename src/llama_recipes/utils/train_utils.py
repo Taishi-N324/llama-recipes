@@ -3,25 +3,26 @@
 
 import os
 import time
-from sympy import sequence
 import yaml
 from pathlib import Path
-from pkg_resources import packaging
+from pkg_resources import packaging  # type ignore
 
 
 import torch
 import torch.cuda.nccl as nccl
 import torch.distributed as dist
-from torch.distributed.fsdp import StateDictType
+from torch.distributed.fsdp import StateDictType  # type: ignore
 from torch.distributed.fsdp.sharded_grad_scaler import ShardedGradScaler
 from tqdm import tqdm
 from transformers import LlamaTokenizer
+from llama_recipes.configs.fsdp import fsdp_config
+from llama_recipes.configs.training import train_config
 
 from llama_recipes.model_checkpointing import save_model_checkpoint, save_model_and_optimizer_sharded, save_optimizer_checkpoint
-from llama_recipes.policies import fpSixteen,bfSixteen_mixed, get_llama_wrapper
+from llama_recipes.policies import fpSixteen, bfSixteen_mixed, get_llama_wrapper, AnyPrecisionAdamW
 from llama_recipes.utils.memory_utils import MemoryTrace
 
-import typing
+from typing import Optional, Type, Any
 import wandb
 
 
@@ -35,7 +36,19 @@ def byte2mb(x):
     return int(x / 2**20)
 
 
-def train(model, train_dataloader, eval_dataloader, tokenizer, optimizer, lr_scheduler, gradient_accumulation_steps, train_config, fsdp_config=None, local_rank=None, rank=None):
+def train(
+    model,
+    train_dataloader: torch.utils.data.dataloader.DataLoader,
+    eval_dataloader: Optional[torch.utils.data.dataloader.DataLoader],
+    tokenizer,
+    optimizer: torch.optim.AdamW | AnyPrecisionAdamW,
+    lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
+    gradient_accumulation_steps: int,
+    train_config: Type[train_config],
+    fsdp_config: Optional[Type[fsdp_config]] = None,
+    local_rank: Optional[int] = None,
+    rank: Optional[int] = None,
+):
     """
     Trains the model on the given dataloader
 
@@ -49,7 +62,7 @@ def train(model, train_dataloader, eval_dataloader, tokenizer, optimizer, lr_sch
         local_rank: The rank of the current node in a distributed setting
         train_config: The training configuration
         eval_dataloader: The dataloader containing the eval data
-        tokenizer: tokenizer used in the eval for decoding the predicitons
+        tokenizer: tokenizer used in the eval for decoding the predictions
 
     Returns: results dictionary containing average training and validation perplexity and loss
     """
@@ -75,7 +88,7 @@ def train(model, train_dataloader, eval_dataloader, tokenizer, optimizer, lr_sch
 
     # set model info
     if rank == 0 and train_config.wandb_name:
-        model_config: dict[str, typing.Any] = {}
+        model_config: dict[str, Any] = {}
         model_config["activation_function"] = model.config.hidden_act
         model_config["hidden_size"] = model.config.hidden_size
         model_config["model_type"] = model.config.model_type
@@ -114,24 +127,24 @@ def train(model, train_dataloader, eval_dataloader, tokenizer, optimizer, lr_sch
                 total_loss += loss.detach().float()
                 if train_config.use_fp16:
                     # if fp16 is enabled, use gradient scaler to handle gradient update
-                    scaler.scale(loss).backward()
+                    scaler.scale(loss).backward()  # type: ignore
                     if (step + 1) % gradient_accumulation_steps == 0 or step == len(train_dataloader) - 1:
                         scaler.step(optimizer)
                         scaler.update()
                         optimizer.zero_grad()
-                        pbar.update(step//gradient_accumulation_steps)
+                        pbar.update(step // gradient_accumulation_steps)
                 else:
                     # regular backpropagation when fp16 is not used
                     loss.backward()
                     if (step + 1) % gradient_accumulation_steps == 0 or step == len(train_dataloader) - 1:
                         optimizer.step()
                         optimizer.zero_grad()
-                        pbar.update(step//gradient_accumulation_steps)
+                        pbar.update(step // gradient_accumulation_steps)
 
                 pbar.set_description(f"Training Epoch: {epoch}/{train_config.num_epochs}, step {step}/{len(train_dataloader)} completed (loss: {loss.detach().float()})")
 
                 if rank == 0 and train_config.wandb_name:
-                    wandb_stats: dict[str, typing.Any] = {}
+                    wandb_stats: dict[str, Any] = {}
 
                     # training info
                     wandb_stats["training/loss"] = loss
@@ -165,7 +178,7 @@ def train(model, train_dataloader, eval_dataloader, tokenizer, optimizer, lr_sch
                     wandb_stats["stats/tokens_per_sec_per_gpu"] = batch_size * sequence_length / step_elapsed_time
 
                     checkpoint_activations_factor = 3
-                    if fsdp_config.fsdp_activation_checkpointing:  # type ignore
+                    if fsdp_config is not None and fsdp_config.fsdp_activation_checkpointing:  # type ignore
                         checkpoint_activations_factor = 4
 
                     num_layers: int = model.config.num_hidden_layers
@@ -186,8 +199,8 @@ def train(model, train_dataloader, eval_dataloader, tokenizer, optimizer, lr_sch
             dist.all_reduce(total_loss, op=dist.ReduceOp.SUM)
         train_epoch_loss = total_loss / len(train_dataloader)
         if train_config.enable_fsdp:
-            train_epoch_loss = train_epoch_loss/world_size
-        train_perplexity = torch.exp(train_epoch_loss)
+            train_epoch_loss = train_epoch_loss / world_size
+        train_perplexity = torch.exp(train_epoch_loss)  # type: ignore
 
         train_prep.append(train_perplexity)
         train_loss.append(train_epoch_loss)
@@ -205,10 +218,10 @@ def train(model, train_dataloader, eval_dataloader, tokenizer, optimizer, lr_sch
             print(f"Peak active CUDA memory was {memtrace.peak_active_gb} GB")
             print(f"Cuda Malloc retires : {memtrace.cuda_malloc_retires}")
             print(f"CPU Total Peak Memory consumed during the train (max): {memtrace.cpu_peaked + memtrace.cpu_begin} GB")
-        
+
         # Update the learning rate as needed
         lr_scheduler.step()
-          
+
         if train_config.run_validation:
             eval_ppl, eval_epoch_loss = evaluation(model, train_config, eval_dataloader, local_rank, tokenizer)
             checkpoint_start_time = time.perf_counter()
@@ -217,39 +230,39 @@ def train(model, train_dataloader, eval_dataloader, tokenizer, optimizer, lr_sch
                     dist.barrier()
                 if train_config.use_peft:
                     if train_config.enable_fsdp:
-                        if rank==0:
-                            print(f"we are about to save the PEFT modules")
+                        if rank == 0:
+                            print("we are about to save the PEFT modules")
                     else:
-                        print(f"we are about to save the PEFT modules")
-                    model.save_pretrained(train_config.output_dir)  
+                        print("we are about to save the PEFT modules")
+                    model.save_pretrained(train_config.output_dir)
                     if train_config.enable_fsdp:
-                        if rank==0: 
+                        if rank == 0:
                             print(f"PEFT modules are saved in {train_config.output_dir} directory")
                     else:
                         print(f"PEFT modules are saved in {train_config.output_dir} directory")
-                        
+
                 else:
-                    if not train_config.use_peft and fsdp_config.checkpoint_type == StateDictType.FULL_STATE_DICT:
-                        
+                    if not train_config.use_peft and fsdp_config.checkpoint_type == StateDictType.FULL_STATE_DICT:  # type: ignore
+
                         save_model_checkpoint(
                             model, optimizer, rank, train_config, epoch=epoch
                         )
-                    elif not train_config.use_peft and fsdp_config.checkpoint_type == StateDictType.SHARDED_STATE_DICT:
+                    elif not train_config.use_peft and fsdp_config.checkpoint_type == StateDictType.SHARDED_STATE_DICT:  # type: ignore
                         print(" Saving the FSDP model checkpoints using SHARDED_STATE_DICT")
                         print("=====================================================")
-                        
+
                         save_model_and_optimizer_sharded(model, rank, train_config)
                         if train_config.save_optimizer:
                             save_model_and_optimizer_sharded(model, rank, train_config, optim=optimizer)
                             print(" Saving the FSDP model checkpoints and optimizer using SHARDED_STATE_DICT")
                             print("=====================================================")
 
-                    if not train_config.use_peft and  train_config.save_optimizer:
+                    if not train_config.use_peft and train_config.save_optimizer:
                         save_optimizer_checkpoint(
                             model, optimizer, rank, train_config, epoch=epoch
                         )
                         print(" Saving the FSDP model checkpoints and optimizer using FULL_STATE_DICT")
-                        print("=====================================================")                     
+                        print("=====================================================")
                 if train_config.enable_fsdp:
                     dist.barrier()
             checkpoint_end_time = time.perf_counter() - checkpoint_start_time
@@ -257,14 +270,14 @@ def train(model, train_dataloader, eval_dataloader, tokenizer, optimizer, lr_sch
             if eval_epoch_loss < best_val_loss:
                 best_val_loss = eval_epoch_loss
                 if train_config.enable_fsdp:
-                    if rank==0:
+                    if rank == 0:
                         print(f"best eval loss on epoch {epoch} is {best_val_loss}")
                 else:
                     print(f"best eval loss on epoch {epoch} is {best_val_loss}")
             val_loss.append(best_val_loss)
             val_prep.append(eval_ppl)
         if train_config.enable_fsdp:
-            if rank==0:
+            if rank == 0:
                 print(f"Epoch {epoch+1}: train_perplexity={train_perplexity:.4f}, train_epoch_loss={train_epoch_loss:.4f}, epcoh time {epoch_end_time}s")
         else:
             print(f"Epoch {epoch+1}: train_perplexity={train_perplexity:.4f}, train_epoch_loss={train_epoch_loss:.4f}, epcoh time {epoch_end_time}s")
@@ -284,13 +297,14 @@ def train(model, train_dataloader, eval_dataloader, tokenizer, optimizer, lr_sch
     results["avg_epoch_time"] = avg_epoch_time
     results["avg_checkpoint_time"] = avg_checkpoint_time
 
-    #saving the training params including fsdp setting for reference.
+    # saving the training params including fsdp setting for reference.
     if train_config.enable_fsdp and not train_config.use_peft:
         save_train_params(train_config, fsdp_config, rank)
 
     return results
 
-def evaluation(model,train_config, eval_dataloader, local_rank, tokenizer):
+
+def evaluation(model, train_config, eval_dataloader, local_rank, tokenizer):
     """
     Evaluates the model on the given dataloader
 
@@ -345,6 +359,7 @@ def evaluation(model,train_config, eval_dataloader, local_rank, tokenizer):
 
     return eval_ppl, eval_epoch_loss
 
+
 def freeze_transformer_layers(model, num_layer):
     for i, layer in enumerate(model.model.layers):
         if i < num_layer:
@@ -394,6 +409,7 @@ def get_parameter_dtypes(model):
         parameter_dtypes[name] = parameter.dtype
     return parameter_dtypes
 
+
 def print_model_size(model, config, rank: int = 0) -> None:
     """
     Print model name, the number of trainable parameters and initialization time.
@@ -441,6 +457,7 @@ def get_policies(cfg, rank):
             print(f"bFloat16 support not present. Using FP32, and not mixed precision")
     wrapping_policy = get_llama_wrapper()
     return mixed_precision_policy, wrapping_policy
+
 
 def save_train_params(train_config, fsdp_config, rank):
     """

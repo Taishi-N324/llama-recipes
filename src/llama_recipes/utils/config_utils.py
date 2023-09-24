@@ -6,9 +6,9 @@ from dataclasses import fields
 from typing import Any, Type
 
 from peft import (
-    LoraConfig,
-    AdaptionPromptConfig,
-    PrefixTuningConfig,
+    LoraConfig,  # type: ignore
+    AdaptionPromptConfig,  # type: ignore
+    PrefixTuningConfig,  # type: ignore
 )
 
 from llama_recipes.configs import (  # noqa: F401
@@ -19,7 +19,14 @@ from llama_recipes.configs import (  # noqa: F401
     train_config,
     fsdp_config,
 )
+from llama_recipes.configs.datasets import (
+    samsum_dataset,
+    grammar_dataset,
+    alpaca_dataset,
+    ja_wikipedia_dataset,
+)
 from llama_recipes.utils.dataset_utils import DATASET_PREPROC
+from llama_recipes.utils.distributed import print_rank_0
 
 
 def update_config(
@@ -70,12 +77,18 @@ def generate_peft_config(train_config: Type[train_config], kwargs: dict[str, Any
     return peft_config
 
 
-def generate_dataset_config(train_config: Type[train_config], kwargs: dict[str, Any]) -> str:
+def generate_dataset_config(
+    train_config: Type[train_config], kwargs: dict[str, Any]
+) -> samsum_dataset | grammar_dataset | alpaca_dataset | ja_wikipedia_dataset:
     names = tuple(DATASET_PREPROC.keys())
 
     assert train_config.dataset in names, f"Unknown dataset: {train_config.dataset}"
 
-    dataset_config: str = {k: v for k, v in inspect.getmembers(datasets)}[train_config.dataset]()
+    dataset_config: samsum_dataset | grammar_dataset | alpaca_dataset | ja_wikipedia_dataset = {
+        k: v for k, v in inspect.getmembers(datasets)
+    }[train_config.dataset]()
+
+    print_rank_0(f"dataset_config: {dataset_config}, type({type(dataset_config)})")
 
     update_config(dataset_config, **kwargs)
 

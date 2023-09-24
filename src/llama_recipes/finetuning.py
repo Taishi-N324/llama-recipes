@@ -51,6 +51,11 @@ def main(**kwargs) -> None:
     torch.cuda.manual_seed(train_config.seed)
     torch.manual_seed(train_config.seed)
 
+    # possibly unbound error を解決するために
+    rank: int = 0
+    local_rank: int = 0
+    world_size: int = 1
+
     # Distributed args.
     if train_config.use_mpi:
         global_rank = int(os.getenv("OMPI_COMM_WORLD_RANK", 0))
@@ -61,8 +66,6 @@ def main(**kwargs) -> None:
         os.environ["LOCAL_RANK"] = str(local_rank)
         os.environ["WORLD_SIZE"] = str(world_size)
 
-    # possibly unbound error を解決するために
-    rank: int = 0
     if train_config.enable_fsdp:
         setup()
         # torchrun specific
@@ -129,6 +132,7 @@ def main(**kwargs) -> None:
             device_map="auto" if train_config.quantization else None,
             use_cache=use_cache,
         )
+
     if train_config.enable_fsdp and train_config.use_fast_kernels:
         """
         For FSDP and FSDP+PEFT, setting 'use_fast_kernels' will enable
@@ -159,6 +163,7 @@ def main(**kwargs) -> None:
         }
     )
     if train_config.use_peft:
+        print(f"Using PEFT method: {train_config.peft_method}", flush=True)
         peft_config = generate_peft_config(train_config, kwargs)
         model = get_peft_model(model, peft_config)
         model.print_trainable_parameters()
@@ -227,7 +232,7 @@ def main(**kwargs) -> None:
             )
 
     # Create DataLoaders for the training and validation dataset
-    train_dataloader = torch.utils.data.DataLoader(
+    train_dataloader: torch.utils.data.dataloader.DataLoader = torch.utils.data.DataLoader(
         dataset_train,
         batch_size=train_config.batch_size_training,
         num_workers=train_config.num_workers_dataloader,
@@ -237,7 +242,7 @@ def main(**kwargs) -> None:
         collate_fn=default_data_collator,
     )
 
-    eval_dataloader = None
+    eval_dataloader: typing.Optional[torch.utils.data.dataloader.DataLoader] = None
     if train_config.run_validation:
         eval_dataloader = torch.utils.data.DataLoader(
             dataset_val,
