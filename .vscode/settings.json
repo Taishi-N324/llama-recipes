@@ -1,14 +1,20 @@
 {
   "cSpell.words": [
+    "backpropagation",
     "bettertransformer",
+    "colour",
     "finetuning",
     "fugaku",
     "memtrace",
+    "OMPI",
+    "pbar",
     "peft",
+    "preds",
     "PREPROC",
     "samsum",
     "Sharded",
-    "tflops"
+    "tflops",
+    "Xformer"
   ],
   "files.watcherExclude": {
     "**/.git/objects/**": true,

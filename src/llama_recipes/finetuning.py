@@ -103,7 +103,7 @@ def main(**kwargs) -> None:
         """
         for FSDP, we can save cpu memory by loading pretrained model on rank0 only.
         this avoids cpu oom when loading large models like llama 70B, in which case
-        model alone would consume 2+TB cpu mem (70 * 4 * 8). This will add some comms
+        model alone would consume 2+TB cpu mem (70 * 4 * 8). This will add some communications
         overhead and currently requires latest nightly.
         """
         v = packaging.version.parse(torch.__version__)
