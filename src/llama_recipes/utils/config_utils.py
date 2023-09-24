@@ -3,6 +3,7 @@
 
 import inspect
 from dataclasses import fields
+from typing import Any, Type
 
 from peft import (
     LoraConfig,
@@ -10,11 +11,21 @@ from peft import (
     PrefixTuningConfig,
 )
 
-from llama_recipes.configs import datasets, lora_config, llama_adapter_config, prefix_config, train_config
+from llama_recipes.configs import (  # noqa: F401
+    datasets,
+    lora_config,
+    llama_adapter_config,
+    prefix_config,
+    train_config,
+    fsdp_config,
+)
 from llama_recipes.utils.dataset_utils import DATASET_PREPROC
 
 
-def update_config(config, **kwargs) -> None:
+def update_config(
+    config: tuple[Type[train_config | fsdp_config]] | Type[train_config | fsdp_config] | Any,
+    **kwargs: dict[str, Any],
+) -> None:
     if isinstance(config, (tuple, list)):
         for c in config:
             update_config(c, **kwargs)
@@ -33,31 +44,39 @@ def update_config(config, **kwargs) -> None:
                         print(f"Warning: {config_name} does not accept parameter: {k}")
             elif isinstance(config, train_config):
                 print(f"Warning: unknown parameter {k}")
-                        
-                        
-def generate_peft_config(train_config, kwargs):
-    configs = (lora_config, llama_adapter_config, prefix_config)
-    peft_configs = (LoraConfig, AdaptionPromptConfig, PrefixTuningConfig)
+
+
+def generate_peft_config(train_config: Type[train_config], kwargs: dict[str, Any]):
+    configs: tuple[Type[lora_config], Type[llama_adapter_config], Type[prefix_config]] = (
+        lora_config,
+        llama_adapter_config,
+        prefix_config,
+    )
+    peft_configs: tuple[Type[LoraConfig], Type[AdaptionPromptConfig], Type[PrefixTuningConfig]] = (
+        LoraConfig,
+        AdaptionPromptConfig,
+        PrefixTuningConfig,
+    )
     names = tuple(c.__name__.rstrip("_config") for c in configs)
-    
+
     assert train_config.peft_method in names, f"Peft config not found: {train_config.peft_method}"
-    
+
     config = configs[names.index(train_config.peft_method)]()
-    
+
     update_config(config, **kwargs)
-    params = {k.name: getattr(config, k.name) for k in fields(config)}
+    params: dict[str, Any] = {k.name: getattr(config, k.name) for k in fields(config)}
     peft_config = peft_configs[names.index(train_config.peft_method)](**params)
-    
+
     return peft_config
 
 
-def generate_dataset_config(train_config, kwargs):
+def generate_dataset_config(train_config: Type[train_config], kwargs: dict[str, Any]) -> str:
     names = tuple(DATASET_PREPROC.keys())
-        
+
     assert train_config.dataset in names, f"Unknown dataset: {train_config.dataset}"
-    
-    dataset_config = {k:v for k, v in inspect.getmembers(datasets)}[train_config.dataset]()
-        
+
+    dataset_config: str = {k: v for k, v in inspect.getmembers(datasets)}[train_config.dataset]()
+
     update_config(dataset_config, **kwargs)
-    
-    return  dataset_config
+
+    return dataset_config

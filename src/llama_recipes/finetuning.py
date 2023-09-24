@@ -9,6 +9,7 @@ import torch.distributed as dist
 import torch.optim as optim
 import wandb
 import typing
+import deepspeed  # noqa: F401
 from peft import get_peft_model, prepare_model_for_int8_training
 from pkg_resources import packaging
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
@@ -42,9 +43,9 @@ from llama_recipes.utils.train_utils import (
 )
 
 
-def main(**kwargs):
+def main(**kwargs) -> None:
     # Update the configuration for the training and sharding process
-    update_config((train_config, fsdp_config), **kwargs)
+    update_config((train_config, fsdp_config), **kwargs)  # type: ignore
 
     # Set the seeds for reproducibility
     torch.cuda.manual_seed(train_config.seed)

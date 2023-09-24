@@ -29,9 +29,11 @@ def set_tokenizer_params(tokenizer: LlamaTokenizer):
     tokenizer.pad_token_id = 0
     tokenizer.padding_side = "left"
 
+
 # Converting Bytes to Megabytes
 def byte2mb(x):
     return int(x / 2**20)
+
 
 def train(model, train_dataloader, eval_dataloader, tokenizer, optimizer, lr_scheduler, gradient_accumulation_steps, train_config, fsdp_config=None, local_rank=None, rank=None):
     """
@@ -154,8 +156,12 @@ def train(model, train_dataloader, eval_dataloader, tokenizer, optimizer, lr_sch
 
                     # stats
                     step_elapsed_time = time.perf_counter() - step_start_time
+                    tokens_per_sec = batch_size * sequence_length / step_elapsed_time * world_size
                     wandb_stats["stats/1_iteration_time"] = step_elapsed_time
-                    wandb_stats["stats/tokens_pef_sec"] = batch_size * sequence_length / step_elapsed_time * world_size
+                    wandb_stats["stats/tokens_pef_sec"] = tokens_per_sec
+                    wandb_stats["stats/30B_tokens_day"] = 30 * (1000 ** 3) / tokens_per_sec / 60 / 60 / 24
+                    wandb_stats["stats/300B_tokens_day"] = 300 * (1000 ** 3) / tokens_per_sec / 60 / 60 / 24
+                    wandb_stats["stats/1T_tokens_day"] = (1000 ** 4) / tokens_per_sec / 60 / 60 / 24
                     wandb_stats["stats/tokens_per_sec_per_gpu"] = batch_size * sequence_length / step_elapsed_time
 
                     checkpoint_activations_factor = 3
