@@ -376,14 +376,20 @@ def evaluation(
     return eval_ppl, eval_epoch_loss
 
 
-def freeze_transformer_layers(model, num_layer):
+def freeze_transformer_layers(model, num_layer: int) -> None:
+    """transformerの一部のlayerをfreezeする
+
+    Args:
+        model: モデル
+        num_layer (int): freezeするlayerの数 [0〜 num_layer)
+    """
     for i, layer in enumerate(model.model.layers):
         if i < num_layer:
             for param in layer.parameters():
                 param.requires_grad = False
 
 
-def check_frozen_layers_peft_model(model):
+def check_frozen_layers_peft_model(model) -> None:
     for i, layer in enumerate(model.base_model.model.model.layers):
         for name, param in layer.named_parameters():
             print(f"Layer {i}, parameter {name}: requires_grad = {param.requires_grad}")
@@ -394,33 +400,33 @@ def setup():
     dist.init_process_group("nccl")
 
 
-def setup_environ_flags(rank):
+def setup_environ_flags(rank: int) -> None:
     """Set environment flags for debugging purposes"""
     os.environ["TORCH_SHOW_CPP_STACKTRACES"] = str(1)
     os.environ["NCCL_ASYNC_ERROR_HANDLING"] = str(1)
     # os.environ["TORCH_DISTRIBUTED_DEBUG"] = "DETAIL"
     # This flag will help with CUDA memory fragmentations that can lead into OOM in some cases.
-    # Note this is only availble in PyTorch Nighlies (as of July 30 2023)
+    # Note this is only available in PyTorch Nighlies (as of July 30 2023)
     # os.environ['PYTORCH_CUDA_ALLOC_CONF']='expandable_segments:True'
     if rank == 0:
         print("--> Running with torch dist debug set to detail")
 
 
-def cleanup():
+def cleanup() -> None:
     """Clean up the process group after training"""
     dist.destroy_process_group()
 
 
-def clear_gpu_cache(rank=None):
+def clear_gpu_cache(rank: Optional[int] = None) -> None:
     """Clear the GPU cache for all ranks"""
     if rank == 0:
         print("Clearing GPU cache for all ranks")
     torch.cuda.empty_cache()
 
 
-def get_parameter_dtypes(model):
+def get_parameter_dtypes(model) -> dict[Any, Any]:
     """Get the data types of model parameters"""
-    parameter_dtypes = {}
+    parameter_dtypes: dict[Any, Any] = {}
     for name, parameter in model.named_parameters():
         parameter_dtypes[name] = parameter.dtype
     return parameter_dtypes
