@@ -482,7 +482,7 @@ def save_train_params(train_config, fsdp_config, rank):
     """
     This function saves the train_config and FSDP config into a train_params.yaml.
     This will be used by converter script in the inference folder to fetch the HF model name or path.
-    It also would be hepful as a log for future references.
+    It also would be helpful as a log for future references.
     """
     # Convert the train_config and fsdp_config objects to dictionaries,
     # converting all values to strings to ensure they can be serialized into a YAML file
