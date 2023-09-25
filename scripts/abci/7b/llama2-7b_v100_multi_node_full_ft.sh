@@ -2,7 +2,7 @@
 #$ -l rt_F=64
 #$ -l h_rt=24:00:00
 #$ -j y
-#$ -o outputs/
+#$ -o outputs/7b/
 #$ -cwd
 
 # module load
