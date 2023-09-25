@@ -13,7 +13,7 @@ class train_config:
     run_validation: bool = True
     batch_size_training: int = 4
     gradient_accumulation_steps: int = 1
-    num_epochs: int = 3
+    num_epochs: int = 1
     num_workers_dataloader: int = 1
     lr: float = 1e-4
     weight_decay: float = 0.0
@@ -33,7 +33,7 @@ class train_config:
     save_model: bool = True
     dist_checkpoint_root_folder: str = "PATH/to/save/FSDP/model"  # will be used if using FSDP
     dist_checkpoint_folder: str = "fine-tuned"  # will be used if using FSDP
-    save_optimizer: bool = False  # will be used if using FSDP
+    save_optimizer: bool = True  # will be used if using FSDP
     use_fast_kernels: bool = False  # Enable using SDPA from PyTorch Accelerated Transformers, make use Flash Attention and Xformer memory-efficient kernels
     use_mpi: bool = False
     wandb_name: Optional[str] = None

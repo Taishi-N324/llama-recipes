@@ -158,9 +158,6 @@ def train(
                     wandb_stats["training/perplexity"] = torch.exp(loss)
 
                     # utils info
-                    print(f"batch: {batch}, type: {type(batch)}")
-                    print(f"batch['input_ids']: {batch['input_ids']}, type: {type(batch['input_ids'])}")
-                    print(f"batch['input_ids'].shape: {batch['input_ids'].shape}")
                     batch_size: int = batch["input_ids"].shape[0]
                     sequence_length: int = batch["input_ids"].shape[1]
 
@@ -452,7 +449,7 @@ def print_model_size(model, config, rank: int = 0) -> None:
 def get_policies(cfg, rank):
     """Get the policies for mixed precision and fsdp wrapping"""
 
-    verify_bfloat_support = (
+    verify_bfloat_support: bool = (
         torch.version.cuda
         and torch.cuda.is_bf16_supported()
         and packaging.version.parse(torch.version.cuda).release >= (11, 0)
@@ -494,12 +491,12 @@ def save_train_params(train_config, fsdp_config, rank):
     # Merge the two dictionaries into one
     train_params_dict = {**train_config_dict, **fsdp_config_dict}
     # Construct the folder name (follwoing FSDP checkpointing style) using properties of the train_config object
-    folder_name = (
+    folder_name: str = (
         train_config.dist_checkpoint_root_folder
         + "/"
         + train_config.dist_checkpoint_folder
-        + "-"
-        + train_config.model_name
+        + "_"
+        + train_config.model_name.split("/")[-1]
     )
 
     save_dir = Path.cwd() / folder_name
