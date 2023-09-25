@@ -7,6 +7,7 @@ outputs/
 checkpoints/
 wandb/
 .env/
+unhealthy_node_list/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
