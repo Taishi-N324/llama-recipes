@@ -1,8 +1,8 @@
 #!/bin/bash
-#$ -l rt_F=16
+#$ -l rt_F=64
 #$ -l h_rt=24:00:00
 #$ -j y
-#$ -o outputs/
+#$ -o outputs/13b/
 #$ -cwd
 
 # module load
@@ -62,10 +62,12 @@ mpirun -np $NUM_GPUS \
   --low_cpu_fsdp \
   --peft_method None \
   --use_fp16 \
+  --num_epochs 1 \
+  --dataset "ja_wikipedia_dataset" \
   --model_name /groups/gaf51217/fujii/finetune/llama2/Llama-2-13b-hf \
-  --batch_size_training 2 \
+  --batch_size_training 1 \
   --dist_checkpoint_root_folder $CHECKPOINTS_PATH \
-  --dist_checkpoint_folder fine-tuned \
+  --dist_checkpoint_folder ja-wiki \
   --use_mpi \
   --use_fast_kernels \
-  --wandb_name "llama2-13b_v100_multi_node_full_finetuning_fast_kernels"
+  --wandb_name "llama2-13b_v100_ja_wiki"
