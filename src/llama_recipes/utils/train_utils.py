@@ -490,7 +490,7 @@ def save_train_params(train_config, fsdp_config, rank):
     fsdp_config_dict = {k: str(v) for k, v in vars(fsdp_config).items() if not k.startswith('__')}
     # Merge the two dictionaries into one
     train_params_dict = {**train_config_dict, **fsdp_config_dict}
-    # Construct the folder name (follwoing FSDP checkpointing style) using properties of the train_config object
+    # Construct the folder name (following FSDP checkpointing style) using properties of the train_config object
     folder_name: str = (
         train_config.dist_checkpoint_root_folder
         + "/"
