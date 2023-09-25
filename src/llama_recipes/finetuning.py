@@ -42,6 +42,7 @@ from llama_recipes.utils.train_utils import (
     setup_environ_flags,
     train,
 )
+from llama_recipes.optimizer import WarmupCosineAnnealingLR
 
 
 def main(**kwargs) -> None:
@@ -271,7 +272,27 @@ def main(**kwargs) -> None:
             lr=train_config.lr,
             weight_decay=train_config.weight_decay,
         )
-    scheduler = StepLR(optimizer, step_size=1, gamma=train_config.gamma)
+
+    """
+    estimated_total_iterations: 学習にかかる iteration数
+    lr_warmup_iterations: learning rateがwarmupしきるのにかかるiterations
+    lr_decay_iterations: learning rate が cosineで落ちきるのにかかるiterations
+    """
+    estimated_total_iterations: int = (
+        train_config.num_epochs * len(train_dataloader) // train_config.gradient_accumulation_steps
+    )
+    lr_warmup_iterations: int = int(estimated_total_iterations * train_config.lr_warmup)
+    lr_decay_iterations: int = int(estimated_total_iterations * train_config.lr_decay)
+
+    if train_config.lr_decay_style == "cosine":
+        scheduler = WarmupCosineAnnealingLR(
+            optimizer=optimizer,
+            warmup_iterations=lr_warmup_iterations,
+            decay_iterations=lr_decay_iterations,
+            max_iterations=estimated_total_iterations,
+        )
+    else:
+        scheduler = StepLR(optimizer, step_size=1, gamma=train_config.gamma)
 
     # Start the training process
     results = train(

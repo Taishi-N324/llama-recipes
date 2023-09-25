@@ -1,5 +1,5 @@
 #!/bin/bash
-#$ -l rt_F=16
+#$ -l rt_F=64
 #$ -l h_rt=24:00:00
 #$ -j y
 #$ -o outputs/7b/
@@ -53,17 +53,31 @@ export NCCL_DEBUG_SUBSYS=WARN
 export PYTHONFAULTHANDLER=1
 export CUDA_LAUNCH_BLOCKING=0
 
-# learning config
-NUM_EPOCHS=10
+# training settings
+NUM_EPOCHS=1
 
-BATCH_SIZE=4
-GRADIENT_ACCUMULATION_STEPS=1
-GLOBAL_BATCH_SIZE=$((${BATCH_SIZE} * ${NUM_GPUS} * ${GRADIENT_ACCUMULATION_STEPS}))
+# batch size
+BATCH_SIZE=2
+GLOBAL_BATCH_SIZE=1024
+GRADIENT_ACCUMULATION_STEPS=$((GLOBAL_BATCH_SIZE / (BATCH_SIZE * NUM_GPUS)))
 
+if (($GRADIENT_ACCUMULATION_STEPS < 1)); then
+  echo "Error: Gradient Accumulation Steps is less than 1. Exiting."
+  exit 1
+fi
+
+# optimizer
 LR=1e-4
-WEIGHT_DECAY=1e-2
+LR_MIN=1e-5
+LR_DECAY=0.80
+LR_WARMUP=0.05
+LR_DECAY_STYLE="cosine"
+WEIGHT_DECAY=0.1
+
+# seed
 SEED=42
 
+# dataset
 NUM_WORKERS_DATALOADER=2
 
 # checkpoint path
@@ -92,9 +106,14 @@ mpirun -np $NUM_GPUS \
   --batch_size_training $BATCH_SIZE \
   --gradient_accumulation_steps $GRADIENT_ACCUMULATION_STEPS \
   --lr $LR \
+  --lr_min $LR_MIN \
+  --lr_warmup $LR_WARMUP \
+  --lr_decay $LR_DECAY \
+  --lr_decay_style $LR_DECAY_STYLE \
   --weight_decay $WEIGHT_DECAY \
   --fsdp_activation_checkpointing \
   --seed $SEED \
+  --dataset "ja_wikipedia_dataset" \
   --num_workers_dataloader $NUM_WORKERS_DATALOADER \
   --save_model \
   --save_optimizer \

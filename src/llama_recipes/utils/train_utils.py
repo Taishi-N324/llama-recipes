@@ -196,6 +196,9 @@ def train(
 
                     wandb.log(wandb_stats)
 
+                # lr scheduler step
+                lr_scheduler.step()
+
         epoch_end_time = time.perf_counter() - epoch_start_time
         epoch_times.append(epoch_end_time)
         # Reducing total_loss across all devices if there's more than one CUDA device
@@ -222,9 +225,6 @@ def train(
             print(f"Peak active CUDA memory was {memtrace.peak_active_gb} GB")
             print(f"Cuda Malloc retires : {memtrace.cuda_malloc_retires}")
             print(f"CPU Total Peak Memory consumed during the train (max): {memtrace.cpu_peaked + memtrace.cpu_begin} GB")
-
-        # Update the learning rate as needed
-        lr_scheduler.step()
 
         if train_config.run_validation:
             eval_ppl, eval_epoch_loss = evaluation(model, train_config, eval_dataloader, local_rank, tokenizer)
@@ -495,8 +495,6 @@ def save_train_params(train_config, fsdp_config, rank):
         train_config.dist_checkpoint_root_folder
         + "/"
         + train_config.dist_checkpoint_folder
-        + "_"
-        + train_config.model_name.split("/")[-1]
     )
 
     save_dir = Path.cwd() / folder_name
