@@ -1,15 +1,20 @@
-torch>=2.0.1
+# huggingface
+transformers>=4.31.0
+datasets
 accelerate
+optimum
+peft
+
 appdirs
 loralib
-bitsandbytes
-black
-black[jupyter]
-datasets
-fire
-peft
-transformers>=4.31.0
-sentencepiece
-py7zr
 scipy
-optimum
+py7zr  # 圧縮解凍library
+bitsandbytes
+fire  # argparser
+
+# formatter & linter
+black
+flake8
+
+# tokenizer
+sentencepiece
