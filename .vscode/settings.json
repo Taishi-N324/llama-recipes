@@ -11,7 +11,9 @@
     "hostfile",
     "memtrace",
     "mpiexec",
+    "nccl",
     "OMPI",
+    "optim",
     "pbar",
     "peft",
     "preds",
@@ -20,11 +22,17 @@
     "samsum",
     "Sharded",
     "tflops",
+    "wandb",
     "Xformer"
   ],
   "files.watcherExclude": {
     "**/.git/objects/**": true,
     "**/.git/subtree-cache/**": true,
-    "**/.env/*/**": true
+    "**/.env/*/**": true,
+    "**/outputs/**": true,
+    "**/ft_datasets/**": true,
+    "**/bitsandbytes/**": true,
+    "**/__pycache__/**": true,
+    "**/wandb/**": true,
   }
 }
