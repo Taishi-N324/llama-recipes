@@ -10,9 +10,9 @@ from pkg_resources import packaging  # type: ignore
 
 import torch
 import torch.cuda.nccl as nccl
-import torch.distributed as dist
 from torch import distributed as torch_distributed  # noqa: F401
 from torch.distributed.fsdp import StateDictType  # type: ignore
+from torch.utils.data import DataLoader
 from torch.distributed.fsdp.sharded_grad_scaler import ShardedGradScaler
 from tqdm import tqdm
 from transformers import LlamaTokenizer
@@ -39,8 +39,8 @@ def byte2mb(x):
 
 def train(
     model,
-    train_dataloader: torch.utils.data.dataloader.DataLoader,
-    eval_dataloader: Optional[torch.utils.data.dataloader.DataLoader],
+    train_dataloader: DataLoader,
+    eval_dataloader: Optional[DataLoader],
     tokenizer,
     optimizer: torch.optim.AdamW | AnyPrecisionAdamW,
     lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
@@ -227,11 +227,17 @@ def train(
             print(f"CPU Total Peak Memory consumed during the train (max): {memtrace.cpu_peaked + memtrace.cpu_begin} GB")
 
         if train_config.run_validation:
-            eval_ppl, eval_epoch_loss = evaluation(model, train_config, eval_dataloader, local_rank, tokenizer)
+            eval_ppl, eval_epoch_loss = evaluation(
+                model=model,
+                train_config=train_config,
+                eval_dataloader=eval_dataloader,  # type: ignore
+                local_rank=local_rank,
+                tokenizer=tokenizer,
+            )
             checkpoint_start_time = time.perf_counter()
             if train_config.save_model and eval_epoch_loss < best_val_loss:
                 if train_config.enable_fsdp:
-                    dist.barrier()
+                    torch_distributed.barrier()
                 if train_config.use_peft:
                     if train_config.enable_fsdp:
                         if rank == 0:
@@ -255,9 +261,13 @@ def train(
                         print(" Saving the FSDP model checkpoints using SHARDED_STATE_DICT")
                         print("=====================================================")
 
-                        save_model_and_optimizer_sharded(model, rank, train_config)
+                        save_model_and_optimizer_sharded(
+                            model=model, rank=rank, cfg=train_config  # type: ignore
+                        )
                         if train_config.save_optimizer:
-                            save_model_and_optimizer_sharded(model, rank, train_config, optim=optimizer)
+                            save_model_and_optimizer_sharded(
+                                model=model, rank=rank, cfg=train_config, optim=optimizer  # type: ignore
+                            )
                             print(" Saving the FSDP model checkpoints and optimizer using SHARDED_STATE_DICT")
                             print("=====================================================")
 
@@ -268,7 +278,7 @@ def train(
                         print(" Saving the FSDP model checkpoints and optimizer using FULL_STATE_DICT")
                         print("=====================================================")
                 if train_config.enable_fsdp:
-                    dist.barrier()
+                    torch_distributed.barrier()
             checkpoint_end_time = time.perf_counter() - checkpoint_start_time
             checkpoint_times.append(checkpoint_end_time)
             if eval_epoch_loss < best_val_loss:
@@ -311,7 +321,7 @@ def train(
 def evaluation(
     model,
     train_config: Type[train_config],
-    eval_dataloader: torch.utils.data.dataloader.DataLoader,
+    eval_dataloader: DataLoader,
     local_rank: int,
     tokenizer,
 ):
@@ -355,7 +365,7 @@ def evaluation(
 
     # If there's more than one CUDA device, reduce evaluation loss across all devices
     if torch.cuda.device_count() > 1 and train_config.enable_fsdp:
-        dist.all_reduce(eval_loss, op=dist.ReduceOp.SUM)
+        torch_distributed.all_reduce(eval_loss, op=torch_distributed.ReduceOp.SUM)
 
     # Compute average loss and perplexity
     eval_epoch_loss = eval_loss / len(eval_dataloader)
@@ -394,7 +404,7 @@ def check_frozen_layers_peft_model(model) -> None:
 
 def setup():
     """Initialize the process group for distributed training"""
-    dist.init_process_group("nccl")
+    torch_distributed.init_process_group("nccl")
 
 
 def setup_environ_flags(rank: int) -> None:
@@ -406,12 +416,12 @@ def setup_environ_flags(rank: int) -> None:
     # Note this is only available in PyTorch Nighlies (as of July 30 2023)
     # os.environ['PYTORCH_CUDA_ALLOC_CONF']='expandable_segments:True'
     if rank == 0:
-        print("--> Running with torch dist debug set to detail")
+        print("--> Running with torch torch_distributed debug set to detail")
 
 
 def cleanup() -> None:
     """Clean up the process group after training"""
-    dist.destroy_process_group()
+    torch_distributed.destroy_process_group()
 
 
 def clear_gpu_cache(rank: Optional[int] = None) -> None:
@@ -450,10 +460,10 @@ def get_policies(cfg, rank):
     """Get the policies for mixed precision and fsdp wrapping"""
 
     verify_bfloat_support: bool = (
-        torch.version.cuda
+        torch.version.cuda  # type: ignore
         and torch.cuda.is_bf16_supported()
-        and packaging.version.parse(torch.version.cuda).release >= (11, 0)
-        and dist.is_nccl_available()
+        and packaging.version.parse(torch.version.cuda).release >= (11, 0)  # type: ignore
+        and torch_distributed.is_nccl_available()
         and nccl.version() >= (2, 10)
     )
 
@@ -495,6 +505,8 @@ def save_train_params(train_config, fsdp_config, rank):
         train_config.dist_checkpoint_root_folder
         + "/"
         + train_config.dist_checkpoint_folder
+        + "-"
+        + train_config.model_name
     )
 
     save_dir = Path.cwd() / folder_name
