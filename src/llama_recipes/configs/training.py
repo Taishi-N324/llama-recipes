@@ -20,6 +20,10 @@ class train_config:
     lr_decay: float = 0.80  # ratio of decay
     lr_warmup: float = 0.002  # ratio of warmup
     lr_decay_style: str = "cosine"
+    use_sequence_length_schedule: bool = False
+    sequence_length: int = 4096
+    sequence_length_warmup_min: int = 8
+    sequence_length_warmup: float = 0.15
     weight_decay: float = 0.1
     gamma: float = 0.85
     seed: int = 42
@@ -36,7 +40,7 @@ class train_config:
     one_gpu: bool = False
     save_model: bool = True
     dist_checkpoint_root_folder: str = "PATH/to/save/FSDP/model"  # will be used if using FSDP
-    dist_checkpoint_folder: str = "fine-tuned"  # will be used if using FSDP
+    dist_checkpoint_folder: str = ""  # will be used if using FSDP
     save_optimizer: bool = True  # will be used if using FSDP
     use_fast_kernels: bool = False  # Enable using SDPA from PyTorch Accelerated Transformers, make use Flash Attention and Xformer memory-efficient kernels
     use_mpi: bool = False
