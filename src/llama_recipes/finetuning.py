@@ -289,6 +289,7 @@ def main(**kwargs) -> None:
             warmup_iterations=lr_warmup_iterations,
             decay_iterations=lr_decay_iterations,
             max_iterations=estimated_total_iterations,
+            eta_min=train_config.lr_min,
         )
     else:
         scheduler = StepLR(optimizer, step_size=1, gamma=train_config.gamma)
