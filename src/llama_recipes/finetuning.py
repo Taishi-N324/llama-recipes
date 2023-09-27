@@ -15,6 +15,7 @@ from pkg_resources import packaging  # type: ignore
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP  # type: ignore
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DistributedSampler
+from torch.utils.data import DataLoader
 from transformers import (
     LlamaConfig,
     LlamaForCausalLM,
@@ -235,7 +236,7 @@ def main(**kwargs) -> None:
             )
 
     # Create DataLoaders for the training and validation dataset
-    train_dataloader: torch.utils.data.dataloader.DataLoader = torch.utils.data.DataLoader(
+    train_dataloader: DataLoader = DataLoader(
         dataset_train,
         batch_size=train_config.batch_size_training,
         num_workers=train_config.num_workers_dataloader,
@@ -245,9 +246,9 @@ def main(**kwargs) -> None:
         collate_fn=default_data_collator,
     )
 
-    eval_dataloader: typing.Optional[torch.utils.data.dataloader.DataLoader] = None
+    eval_dataloader: typing.Optional[DataLoader] = None
     if train_config.run_validation:
-        eval_dataloader = torch.utils.data.DataLoader(
+        eval_dataloader = DataLoader(
             dataset_val,
             batch_size=train_config.val_batch_size,
             num_workers=train_config.num_workers_dataloader,
