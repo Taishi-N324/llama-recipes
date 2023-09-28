@@ -19,7 +19,8 @@ from transformers import LlamaTokenizer
 from llama_recipes.configs.fsdp import fsdp_config
 from llama_recipes.configs.training import train_config
 
-from llama_recipes.model_checkpointing import save_model_checkpoint, save_model_and_optimizer_sharded, save_optimizer_checkpoint
+from llama_recipes.model_checkpointing import load_optimizer_checkpoint, save_checkpoint
+from llama_recipes.model_checkpointing.checkpoint_handler import load_model_sharded
 from llama_recipes.policies import fpSixteen, bfSixteen_mixed, get_llama_wrapper, AnyPrecisionAdamW
 from llama_recipes.utils.memory_utils import MemoryTrace
 
@@ -243,7 +244,28 @@ def train(
                     tflops: float = flops_per_iteration / (step_elapsed_time * (10**12))
                     wandb_stats["stats/tflops"] = tflops
 
-                    wandb.log(wandb_stats)
+                    wandb.log(wandb_stats, step=wandb_steps)
+
+                if (
+                    wandb_steps % train_config.save_interval_iteration == 0
+                    and wandb_steps != 0
+                    and not train_config.use_peft
+                ):
+                    if train_config.enable_fsdp:
+                        torch_distributed.barrier()
+
+                    save_checkpoint(
+                        model=model,
+                        optimizer=optimizer,
+                        train_config=train_config,
+                        fsdp_config=fsdp_config,  # type: ignore
+                        rank=rank if rank is not None else 0,
+                        epoch=epoch,
+                        iteration=wandb_steps,
+                    )
+
+                    if train_config.enable_fsdp:
+                        torch_distributed.barrier()
 
                 # lr scheduler step
                 lr_scheduler.step()
@@ -305,31 +327,15 @@ def train(
                         print(f"PEFT modules are saved in {train_config.output_dir} directory")
 
                 else:
-                    if not train_config.use_peft and fsdp_config.checkpoint_type == StateDictType.FULL_STATE_DICT:  # type: ignore
-
-                        save_model_checkpoint(
-                            model, optimizer, rank, train_config, epoch=epoch
-                        )
-                    elif not train_config.use_peft and fsdp_config.checkpoint_type == StateDictType.SHARDED_STATE_DICT:  # type: ignore
-                        print(" Saving the FSDP model checkpoints using SHARDED_STATE_DICT")
-                        print("=====================================================")
-
-                        save_model_and_optimizer_sharded(
-                            model=model, rank=rank, cfg=train_config  # type: ignore
-                        )
-                        if train_config.save_optimizer:
-                            save_model_and_optimizer_sharded(
-                                model=model, rank=rank, cfg=train_config, optim=optimizer  # type: ignore
-                            )
-                            print(" Saving the FSDP model checkpoints and optimizer using SHARDED_STATE_DICT")
-                            print("=====================================================")
-
-                    if not train_config.use_peft and train_config.save_optimizer:
-                        save_optimizer_checkpoint(
-                            model, optimizer, rank, train_config, epoch=epoch
-                        )
-                        print(" Saving the FSDP model checkpoints and optimizer using FULL_STATE_DICT")
-                        print("=====================================================")
+                    save_checkpoint(
+                        model=model,
+                        optimizer=optimizer,
+                        train_config=train_config,
+                        fsdp_config=fsdp_config,  # type: ignore
+                        rank=rank if rank is not None else 0,
+                        epoch=epoch,
+                        iteration=epoch * len(train_dataloader),
+                    )
                 if train_config.enable_fsdp:
                     torch_distributed.barrier()
             checkpoint_end_time = time.perf_counter() - checkpoint_start_time

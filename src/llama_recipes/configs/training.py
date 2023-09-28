@@ -42,6 +42,8 @@ class train_config:
     dist_checkpoint_root_folder: str = "PATH/to/save/FSDP/model"  # will be used if using FSDP
     dist_checkpoint_folder: str = ""  # will be used if using FSDP
     save_optimizer: bool = True  # will be used if using FSDP
+    load_checkpoint: str = ""
+    save_interval_iteration: int = 50
     use_fast_kernels: bool = False  # Enable using SDPA from PyTorch Accelerated Transformers, make use Flash Attention and Xformer memory-efficient kernels
     use_mpi: bool = False
     wandb_name: Optional[str] = None
