@@ -28,7 +28,9 @@ import torch.distributed._shard.checkpoint as dist_cp
 import torch.distributed as dist
 
 from llama_recipes.configs import train_config
-from typing import Type
+from typing import Type, Any
+
+from llama_recipes.configs.fsdp import fsdp_config
 
 
 def get_date_of_run() -> str:
@@ -44,14 +46,9 @@ def get_date_of_run() -> str:
 fullstate_save_policy = FullStateDictConfig(offload_to_cpu=True, rank0_only=True)
 
 
-def load_model_sharded(model, rank, cfg):
-    # torch.manual_seed(103)
+def load_model_sharded(model, rank: int, cfg: Type[train_config]) -> tuple[int, int, int]:
     folder_name = (
-        cfg.dist_checkpoint_root_folder
-        + "/"
-        + cfg.dist_checkpoint_folder
-        + "-"
-        + cfg.model_name
+        cfg.dist_checkpoint_root_folder + "/" + cfg.dist_checkpoint_folder + "-" + cfg.model_name
     )
 
     load_dir = Path.cwd() / folder_name
@@ -59,7 +56,8 @@ def load_model_sharded(model, rank, cfg):
     if not load_dir.exists():
         if rank == 0:
             print("No sharded_state_dict checkpoint directory found...skipping")
-        return
+        return 0, 0, 0
+
     if rank == 0:
         print(f"loading model from model path: {load_dir} ")
     reader = FileSystemReader(load_dir)
@@ -77,23 +75,33 @@ def load_model_sharded(model, rank, cfg):
         if rank == 0:
             print("checkpoint after load_state_dict()")
             ck = checkpoint.keys()
-            print(" checkpoint key len = {len(ck)} and \n keys =  {ck}")
+            print(f" checkpoint key len = {len(ck)} and \n keys =  {ck}")
         model.load_state_dict(checkpoint["model"])
+
     if rank == 0:
         print(f"Sharded state checkpoint loaded from {load_dir}")
 
+    epoch: int = checkpoint.get("epoch", 0)
+    iteration: int = checkpoint.get("iteration", 0)
+    consumed_tokens: int = checkpoint.get("consumed_tokens", 0)
+    return epoch, iteration, consumed_tokens
 
-def save_model_and_optimizer_sharded(model, rank: int, cfg: Type[train_config], optim=None) -> None:
+
+def save_model_and_optimizer_sharded(
+    model,
+    rank: int,
+    cfg: Type[train_config],
+    optim=None,
+    epoch=None,
+    iteration=None,
+    consumed_tokens=None,
+) -> None:
     """
     save model and optimizer via sharded_state_dict to save_dir
     """
 
     folder_name: str = (
-        cfg.dist_checkpoint_root_folder
-        + "/"
-        + cfg.dist_checkpoint_folder
-        + "-"
-        + cfg.model_name
+        cfg.dist_checkpoint_root_folder + "/" + cfg.dist_checkpoint_folder + "-" + cfg.model_name
     )
 
     save_dir = Path.cwd() / folder_name
@@ -106,10 +114,15 @@ def save_model_and_optimizer_sharded(model, rank: int, cfg: Type[train_config], 
     t0 = time.perf_counter()
 
     with FSDP.state_dict_type(model, StateDictType.SHARDED_STATE_DICT):
-
-        state_dict = {"model": model.state_dict()}
+        state_dict: dict[str, Any] = {"model": model.state_dict()}
         if optim is not None:
             state_dict["optim"] = FSDP.optim_state_dict(model, optim)
+        if epoch is not None:
+            state_dict["epoch"] = epoch
+        if iteration is not None:
+            state_dict["iteration"] = iteration
+        if consumed_tokens is not None:
+            state_dict["consumed_tokens"] = consumed_tokens
 
         dist_cp.save_state_dict(
             state_dict=state_dict,
@@ -119,10 +132,8 @@ def save_model_and_optimizer_sharded(model, rank: int, cfg: Type[train_config], 
     dist.barrier()
     t1 = time.perf_counter()
     if rank == 0:
-        print(f"Sharded state checkpoint saved to {save_dir}")
-        print(
-            f"Checkpoint Time = {t1-t0:.4f}\n"
-        )
+        print(f"Sharded state checkpoint saved to {save_dir}, iteration={iteration}")
+        print(f"Checkpoint Time = {t1-t0:.4f}\n")
 
 
 def save_model_checkpoint(
@@ -134,9 +145,7 @@ def save_model_checkpoint(
 ) -> None:
     """saving model via rank0 cpu streaming and full_state_dict"""
 
-    with FSDP.state_dict_type(
-        model, StateDictType.FULL_STATE_DICT, fullstate_save_policy
-    ):
+    with FSDP.state_dict_type(model, StateDictType.FULL_STATE_DICT, fullstate_save_policy):
         cpu_state = model.state_dict()
 
         print(f"saving process: rank {rank}  done w model state_dict\n")
@@ -169,14 +178,10 @@ def load_model_checkpoint(model, rank, cfg) -> None:
         return
 
     # where is the checkpoint at...
-    full_state_dict_model_path = (
-        Path.cwd() / cfg.checkpoint_folder / cfg.checkpoint_model_filename
-    )
+    full_state_dict_model_path = Path.cwd() / cfg.checkpoint_folder / cfg.checkpoint_model_filename
     # is it present...
     if not full_state_dict_model_path.is_file():
-        print(
-            f"model checkpoint {full_state_dict_model_path} not present. Returning..."
-        )
+        print(f"model checkpoint {full_state_dict_model_path} not present. Returning...")
         return
 
     model_checkpoint = torch.load(full_state_dict_model_path)
@@ -208,9 +213,7 @@ def save_optimizer_checkpoint(model, optimizer, rank, cfg, epoch=1):
         save_dir = Path.cwd() / folder_name
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        opt_save_name = (
-            "optimizer" + "-" + cfg.model_name + "-" + str(epoch) + ".pt"
-        )
+        opt_save_name = "optimizer" + "-" + cfg.model_name + "-" + str(epoch) + ".pt"
         opt_save_full_path = save_dir / opt_save_name
 
         print("--> saving optimizer state...")
@@ -245,10 +248,7 @@ def load_optimizer_checkpoint(model, optimizer_checkpoint_path, rank: int) -> No
 
 
 def load_sharded_model_single_gpu(model, model_path: str):
-
-    state_dict = {
-        "model": model.state_dict()
-    }
+    state_dict = {"model": model.state_dict()}
 
     dist_cp.load_state_dict(
         state_dict=state_dict,
@@ -259,3 +259,36 @@ def load_sharded_model_single_gpu(model, model_path: str):
     model.load_state_dict(state_dict["model"])
     print(f"Sharded state checkpoint loaded from {model_path}")
     return model
+
+
+def save_checkpoint(
+    model,
+    optimizer,
+    train_config: Type[train_config],
+    fsdp_config: Type[fsdp_config],
+    rank: int,
+    epoch: int,
+    iteration: int,
+) -> None:
+    if not train_config.use_peft and fsdp_config.checkpoint_type == StateDictType.FULL_STATE_DICT:  # type: ignore
+        save_model_checkpoint(model, optimizer, rank, train_config, epoch=epoch)
+        if not train_config.use_peft and train_config.save_optimizer:
+            save_optimizer_checkpoint(model, optimizer, rank, train_config, epoch=epoch)
+            print(" Saving the FSDP model checkpoints and optimizer using FULL_STATE_DICT")
+            print("=====================================================")
+
+    # ABCI Llama-2 Continual Learning use below
+    elif not train_config.use_peft and fsdp_config.checkpoint_type == StateDictType.SHARDED_STATE_DICT:  # type: ignore
+        if train_config.save_optimizer:
+            print(f" Saving the FSDP model checkpoints and optimizer using SHARDED_STATE_DICT: rank: {rank}")
+            print("=====================================================")
+            save_model_and_optimizer_sharded(
+                model=model, rank=rank, cfg=train_config, optim=optimizer, iteration=iteration
+            )
+            print(f"saved model and optimizer checkpoint for epoch {epoch} and iteration {iteration}")
+            print("=====================================================")
+        else:
+            print(f" Saving the FSDP model checkpoints using SHARDED_STATE_DICT: rank: {rank}")
+            print("=====================================================")
+            save_model_and_optimizer_sharded(model=model, rank=rank, cfg=train_config)  # type: ignore
+            print("=====================================================")
