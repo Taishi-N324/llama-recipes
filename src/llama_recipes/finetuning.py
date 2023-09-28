@@ -284,9 +284,11 @@ def main(**kwargs) -> None:
     lr_decay_iterations: int = int(estimated_total_iterations * train_config.lr_decay)
     if train_config.wandb_name is not None and rank == 0:
         wandb.config.update(
-            {"total_iteration": estimated_total_iterations},
-            {"warmup_iteration": lr_warmup_iterations},
-            {"decay_iteration": lr_decay_iterations}
+            {
+                "total_iteration": estimated_total_iterations,
+                "warmup_iteration": lr_warmup_iterations,
+                "decay_iteration": lr_decay_iterations,
+            }
         )
 
     if train_config.lr_decay_style == "cosine":
