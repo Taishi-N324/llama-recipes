@@ -138,17 +138,18 @@ def train(
                 colour="blue",
                 desc=f"Training Epoch: {epoch}",
                 total=total_length,
-                disable=(rank != 0)
+                disable=(rank != 0),
             )
 
-            for step, batch in enumerate(train_dataloader):
+            for step, batch in enumerate(train_dataloader, start=last_iteration):
+                wandb_steps: int = epoch * len(train_dataloader) + step
                 step_start_time = time.perf_counter()
 
                 for key in batch.keys():
                     if train_config.enable_fsdp:
                         batch[key] = batch[key].to(local_rank)
                     else:
-                        batch[key] = batch[key].to('cuda:0')
+                        batch[key] = batch[key].to("cuda:0")
 
                 loss = model(**batch).loss
                 loss = loss / gradient_accumulation_steps
@@ -156,7 +157,9 @@ def train(
                 if train_config.use_fp16:
                     # if fp16 is enabled, use gradient scaler to handle gradient update
                     scaler.scale(loss).backward()  # type: ignore
-                    if (step + 1) % gradient_accumulation_steps == 0 or step == len(train_dataloader) - 1:
+                    if (step + 1) % gradient_accumulation_steps == 0 or step == len(
+                        train_dataloader
+                    ) - 1:
                         scaler.step(optimizer)  # type: ignore (suppress ubound error)
                         scaler.update()  # type: ignore (suppress ubound error)
                         optimizer.zero_grad()
@@ -164,12 +167,16 @@ def train(
                 else:
                     # regular backpropagation when fp16 is not used
                     loss.backward()
-                    if (step + 1) % gradient_accumulation_steps == 0 or step == len(train_dataloader) - 1:
+                    if (step + 1) % gradient_accumulation_steps == 0 or step == len(
+                        train_dataloader
+                    ) - 1:
                         optimizer.step()
                         optimizer.zero_grad()
                         pbar.update(step // gradient_accumulation_steps)
 
-                pbar.set_description(f"Training Epoch: {epoch}/{train_config.num_epochs}, step {step}/{len(train_dataloader)} completed (loss: {loss.detach().float()})")
+                pbar.set_description(
+                    f"Training Epoch: {epoch}/{train_config.num_epochs}, step {step}/{len(train_dataloader)} completed (loss: {loss.detach().float()})"
+                )
 
                 if rank == 0 and train_config.wandb_name:
                     wandb_stats: dict[str, Any] = {}
@@ -190,20 +197,30 @@ def train(
                     wandb_stats["utils/step"] = step
 
                     # optimizer info
-                    wandb_stats["optimizer/lr"] = optimizer.param_groups[0]['lr']
+                    wandb_stats["optimizer/lr"] = optimizer.param_groups[0]["lr"]
 
                     # stats
                     step_elapsed_time = time.perf_counter() - step_start_time
                     tokens_per_sec = batch_size * sequence_length / step_elapsed_time * world_size
                     wandb_stats["stats/1_iteration_time"] = step_elapsed_time
                     wandb_stats["stats/tokens_pef_sec"] = tokens_per_sec
-                    wandb_stats["stats/30B_tokens_day"] = 30 * (1000 ** 3) / tokens_per_sec / 60 / 60 / 24
-                    wandb_stats["stats/300B_tokens_day"] = 300 * (1000 ** 3) / tokens_per_sec / 60 / 60 / 24
-                    wandb_stats["stats/1T_tokens_day"] = (1000 ** 4) / tokens_per_sec / 60 / 60 / 24
-                    wandb_stats["stats/tokens_per_sec_per_gpu"] = batch_size * sequence_length / step_elapsed_time
+                    wandb_stats["stats/30B_tokens_day"] = (
+                        30 * (1000**3) / tokens_per_sec / 60 / 60 / 24
+                    )
+                    wandb_stats["stats/300B_tokens_day"] = (
+                        300 * (1000**3) / tokens_per_sec / 60 / 60 / 24
+                    )
+                    wandb_stats["stats/1T_tokens_day"] = (
+                        (1000**4) / tokens_per_sec / 60 / 60 / 24
+                    )
+                    wandb_stats["stats/tokens_per_sec_per_gpu"] = (
+                        batch_size * sequence_length / step_elapsed_time
+                    )
 
                     checkpoint_activations_factor = 3
-                    if fsdp_config is not None and fsdp_config.fsdp_activation_checkpointing:  # type ignore
+                    if (
+                        fsdp_config is not None and fsdp_config.fsdp_activation_checkpointing
+                    ):  # type ignore
                         checkpoint_activations_factor = 4
 
                     num_layers: int = model.config.num_hidden_layers
@@ -211,7 +228,18 @@ def train(
                     vocab_size: int = model.config.vocab_size
 
                     # tflops calculation
-                    flops_per_iteration: float = (24 * checkpoint_activations_factor * batch_size * sequence_length * num_layers * (hidden_size**2)) * (1. + (sequence_length / (6. * hidden_size)) + (vocab_size / (16. * num_layers * hidden_size)))
+                    flops_per_iteration: float = (
+                        24
+                        * checkpoint_activations_factor
+                        * batch_size
+                        * sequence_length
+                        * num_layers
+                        * (hidden_size**2)
+                    ) * (
+                        1.0
+                        + (sequence_length / (6.0 * hidden_size))
+                        + (vocab_size / (16.0 * num_layers * hidden_size))
+                    )
                     tflops: float = flops_per_iteration / (step_elapsed_time * (10**12))
                     wandb_stats["stats/tflops"] = tflops
 
@@ -224,7 +252,7 @@ def train(
         epoch_times.append(epoch_end_time)
         # Reducing total_loss across all devices if there's more than one CUDA device
         if torch.cuda.device_count() > 1 and train_config.enable_fsdp:
-            dist.all_reduce(total_loss, op=dist.ReduceOp.SUM)
+            torch_distributed.all_reduce(total_loss, op=torch_distributed.ReduceOp.SUM)
         train_epoch_loss: float = total_loss / len(train_dataloader)
         if train_config.enable_fsdp:
             train_epoch_loss: float = train_epoch_loss / world_size
@@ -239,13 +267,17 @@ def train(
                 print(f"Max CUDA memory reserved was {memtrace.max_reserved} GB")
                 print(f"Peak active CUDA memory was {memtrace.peak_active_gb} GB")
                 print(f"Cuda Malloc retires : {memtrace.cuda_malloc_retires}")
-                print(f"CPU Total Peak Memory consumed during the train (max): {memtrace.cpu_peaked + memtrace.cpu_begin} GB")
+                print(
+                    f"CPU Total Peak Memory consumed during the train (max): {memtrace.cpu_peaked + memtrace.cpu_begin} GB"
+                )
         else:
             print(f"Max CUDA memory allocated was {memtrace.peak} GB")
             print(f"Max CUDA memory reserved was {memtrace.max_reserved} GB")
             print(f"Peak active CUDA memory was {memtrace.peak_active_gb} GB")
             print(f"Cuda Malloc retires : {memtrace.cuda_malloc_retires}")
-            print(f"CPU Total Peak Memory consumed during the train (max): {memtrace.cpu_peaked + memtrace.cpu_begin} GB")
+            print(
+                f"CPU Total Peak Memory consumed during the train (max): {memtrace.cpu_peaked + memtrace.cpu_begin} GB"
+            )
 
         if train_config.run_validation:
             eval_ppl, eval_epoch_loss = evaluation(
@@ -313,22 +345,28 @@ def train(
             val_prep.append(eval_ppl)
         if train_config.enable_fsdp:
             if rank == 0:
-                print(f"Epoch {epoch+1}: train_perplexity={train_perplexity:.4f}, train_epoch_loss={train_epoch_loss:.4f}, epoch time {epoch_end_time}s")
+                print(
+                    f"Epoch {epoch+1}: train_perplexity={train_perplexity:.4f}, train_epoch_loss={train_epoch_loss:.4f}, epoch time {epoch_end_time}s"
+                )
         else:
-            print(f"Epoch {epoch+1}: train_perplexity={train_perplexity:.4f}, train_epoch_loss={train_epoch_loss:.4f}, epoch time {epoch_end_time}s")
+            print(
+                f"Epoch {epoch+1}: train_perplexity={train_perplexity:.4f}, train_epoch_loss={train_epoch_loss:.4f}, epoch time {epoch_end_time}s"
+            )
     avg_epoch_time = sum(epoch_times) / len(epoch_times)
-    avg_checkpoint_time = sum(checkpoint_times) / len(checkpoint_times) if len(checkpoint_times) > 0 else 0
+    avg_checkpoint_time = (
+        sum(checkpoint_times) / len(checkpoint_times) if len(checkpoint_times) > 0 else 0
+    )
     avg_train_prep = sum(train_prep) / len(train_prep)
     avg_train_loss = sum(train_loss) / len(train_loss)
     if train_config.run_validation:
         avg_eval_prep = sum(val_prep) / len(val_prep)
         avg_eval_loss = sum(val_loss) / len(val_loss)
 
-    results['avg_train_prep'] = avg_train_prep
-    results['avg_train_loss'] = avg_train_loss
+    results["avg_train_prep"] = avg_train_prep
+    results["avg_train_loss"] = avg_train_loss
     if train_config.run_validation:
-        results['avg_eval_prep'] = avg_eval_prep  # type: ignore (suppress ubound error)
-        results['avg_eval_loss'] = avg_eval_loss  # type: ignore (suppress ubound error)
+        results["avg_eval_prep"] = avg_eval_prep  # type: ignore (suppress ubound error)
+        results["avg_eval_loss"] = avg_eval_loss  # type: ignore (suppress ubound error)
     results["avg_epoch_time"] = avg_epoch_time
     results["avg_checkpoint_time"] = avg_checkpoint_time
 
@@ -366,12 +404,14 @@ def evaluation(
     eval_loss = 0.0  # Initialize evaluation loss
 
     with MemoryTrace() as memtrace:  # noqa: F841
-        for step, batch in enumerate(tqdm(eval_dataloader, colour="green", desc="evaluating Epoch")):
+        for step, batch in enumerate(
+            tqdm(eval_dataloader, colour="green", desc="evaluating Epoch")
+        ):
             for key in batch.keys():
                 if train_config.enable_fsdp:
                     batch[key] = batch[key].to(local_rank)
                 else:
-                    batch[key] = batch[key].to('cuda:0')
+                    batch[key] = batch[key].to("cuda:0")
             # Ensure no gradients are computed for this scope to save memory
             with torch.no_grad():
                 # Forward pass and compute loss
@@ -517,8 +557,10 @@ def save_train_params(train_config, fsdp_config, rank):
     """
     # Convert the train_config and fsdp_config objects to dictionaries,
     # converting all values to strings to ensure they can be serialized into a YAML file
-    train_config_dict = {k: str(v) for k, v in vars(train_config).items() if not k.startswith('__')}
-    fsdp_config_dict = {k: str(v) for k, v in vars(fsdp_config).items() if not k.startswith('__')}
+    train_config_dict = {
+        k: str(v) for k, v in vars(train_config).items() if not k.startswith("__")
+    }
+    fsdp_config_dict = {k: str(v) for k, v in vars(fsdp_config).items() if not k.startswith("__")}
     # Merge the two dictionaries into one
     train_params_dict = {**train_config_dict, **fsdp_config_dict}
     # Construct the folder name (following FSDP checkpointing style) using properties of the train_config object
@@ -536,14 +578,14 @@ def save_train_params(train_config, fsdp_config, rank):
         os.makedirs(save_dir)
     # Convert the dictionary to a YAML string
     config_yaml = yaml.dump(train_params_dict, indent=4)
-    file_name = os.path.join(save_dir, 'train_params.yaml')
+    file_name = os.path.join(save_dir, "train_params.yaml")
 
     # Check if there's a directory with the same name as the file
     if os.path.isdir(file_name):
         print(f"Error: {file_name} is a directory, not a file.")
     else:
         # Write the YAML string to the file
-        with open(file_name, 'w') as f:
+        with open(file_name, "w") as f:
             f.write(config_yaml)
         if rank == 0:
             print(f"training params are saved in {file_name}")
