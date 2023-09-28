@@ -107,7 +107,28 @@ def train(
         # distributed training info
         wandb.config.update({"world_size": world_size})
 
-    for epoch in range(train_config.num_epochs):
+    if train_config.use_sequence_length_schedule:
+        pass
+
+    last_epoch: int = 0
+    last_iteration: int = 0
+    consumed_tokens: int = 0
+    # model load & 学習状態を復元
+    if train_config.load_checkpoint != "":
+        if train_config.enable_fsdp:
+            torch_distributed.barrier()
+
+        last_epoch, last_iteration, consumed_tokens = load_model_sharded(
+            model=model, rank=rank if rank is not None else 0, cfg=train_config
+        )
+        load_optimizer_checkpoint(
+            model=model, optimizer_checkpoint_path="", rank=rank if rank is not None else 0
+        )
+
+        if train_config.enable_fsdp:
+            torch_distributed.barrier()
+
+    for epoch in range(last_epoch, train_config.num_epochs):
         epoch_start_time = time.perf_counter()
         with MemoryTrace() as memtrace:  # track the memory usage
             model.train()
