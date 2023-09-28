@@ -6,7 +6,6 @@ from functools import partial
 from pathlib import Path
 from typing import Type
 
-import torch
 import datasets
 
 from llama_recipes.datasets import (
@@ -18,6 +17,8 @@ from llama_recipes.datasets import (
 from llama_recipes.configs.datasets import ja_wikipedia_dataset
 from llama_recipes.datasets.utils import Concatenator
 from llama_recipes.utils.distributed import print_rank_0, is_rank_0
+
+from torch.utils.data import Dataset
 
 
 def load_module_from_py_file(py_file: str) -> object:
@@ -107,7 +108,7 @@ DATASET_PREPROC = {
 
 def get_preprocessed_dataset(
     tokenizer, dataset_config, split: str = "train"
-) -> torch.utils.data.Dataset:
+) -> Dataset:
     if dataset_config.dataset not in DATASET_PREPROC:
         raise NotImplementedError(f"{dataset_config.dataset} is not (yet) implemented")
 
