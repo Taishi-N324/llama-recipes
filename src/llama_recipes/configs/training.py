@@ -30,7 +30,7 @@ class train_config:
     use_fp16: bool = False
     mixed_precision: bool = True
     val_batch_size: int = 1
-    dataset = "samsum_dataset"
+    dataset: str = "ja_wikipedia_dataset"
     peft_method: str = "lora"  # None , llama_adapter, prefix
     use_peft: bool = False
     output_dir: str = "PATH/to/save/PEFT/model"
@@ -41,8 +41,9 @@ class train_config:
     save_model: bool = True
     dist_checkpoint_root_folder: str = "PATH/to/save/FSDP/model"  # will be used if using FSDP
     dist_checkpoint_folder: str = ""  # will be used if using FSDP
+    save_checkpoint_path: str = ""
     save_optimizer: bool = True  # will be used if using FSDP
-    load_checkpoint: str = ""
+    load_checkpoint_path: str = ""
     save_interval_iteration: int = 50
     use_fast_kernels: bool = False  # Enable using SDPA from PyTorch Accelerated Transformers, make use Flash Attention and Xformer memory-efficient kernels
     use_mpi: bool = False
