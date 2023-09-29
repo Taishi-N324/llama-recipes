@@ -5,7 +5,7 @@ import os
 
 import fire
 import torch
-import torch.distributed as dist
+import torch.distributed as torch_distributed
 import torch.optim as optim
 import wandb
 import typing
@@ -94,7 +94,7 @@ def main(**kwargs) -> None:
         }
         wandb.init(**wandb_setting)
 
-    if torch.distributed.is_initialized():  # type: ignore
+    if torch_distributed.is_initialized():
         torch.cuda.set_device(local_rank)  # type: ignore
         clear_gpu_cache(local_rank)  # type: ignore
         setup_environ_flags(rank)  # type: ignore
@@ -224,15 +224,15 @@ def main(**kwargs) -> None:
     if train_config.enable_fsdp:
         train_sampler = DistributedSampler(
             dataset_train,
-            rank=dist.get_rank(),
-            num_replicas=dist.get_world_size(),
+            rank=torch_distributed.get_rank(),
+            num_replicas=torch_distributed.get_world_size(),
             shuffle=True,
         )
         if train_config.run_validation:
             val_sampler = DistributedSampler(
                 dataset_val,
-                rank=dist.get_rank(),
-                num_replicas=dist.get_world_size(),
+                rank=torch_distributed.get_rank(),
+                num_replicas=torch_distributed.get_world_size(),
             )
 
     # Create DataLoaders for the training and validation dataset
