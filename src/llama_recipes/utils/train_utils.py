@@ -11,15 +11,15 @@ from pkg_resources import packaging  # type: ignore
 import torch
 import torch.cuda.nccl as nccl
 from torch import distributed as torch_distributed  # noqa: F401
-from torch.distributed.fsdp import StateDictType  # type: ignore
 from torch.utils.data import DataLoader
 from torch.distributed.fsdp.sharded_grad_scaler import ShardedGradScaler
+from torch.nn.utils import clip_grad_norm_  # type: ignore
 from tqdm import tqdm
 from transformers import LlamaTokenizer
 from llama_recipes.configs.fsdp import fsdp_config
 from llama_recipes.configs.training import train_config
 
-from llama_recipes.model_checkpointing import load_optimizer_checkpoint, save_checkpoint
+from llama_recipes.model_checkpointing import save_checkpoint
 from llama_recipes.model_checkpointing.checkpoint_handler import load_model_sharded
 from llama_recipes.policies import fpSixteen, bfSixteen_mixed, get_llama_wrapper, AnyPrecisionAdamW
 from llama_recipes.utils.memory_utils import MemoryTrace
@@ -115,15 +115,16 @@ def train(
     last_iteration: int = 0
     consumed_tokens: int = 0
     # model load & 学習状態を復元
-    if train_config.load_checkpoint != "":
+    if train_config.load_checkpoint_path != "":
         if train_config.enable_fsdp:
             torch_distributed.barrier()
 
         last_epoch, last_iteration, consumed_tokens = load_model_sharded(
-            model=model, rank=rank if rank is not None else 0, cfg=train_config
-        )
-        load_optimizer_checkpoint(
-            model=model, optimizer_checkpoint_path="", rank=rank if rank is not None else 0
+            model=model,
+            optimizer=optimizer,
+            scheduler=lr_scheduler,
+            rank=rank if rank is not None else 0,
+            cfg=train_config,
         )
 
         if train_config.enable_fsdp:
@@ -174,6 +175,12 @@ def train(
                         optimizer.step()
                         optimizer.zero_grad()
                         pbar.update(step // gradient_accumulation_steps)
+
+                # gradient clipping
+                if train_config.clip_grad_norm > 0:
+                    clip_grad_norm_(
+                        model.parameters(), train_config.clip_grad_norm
+                    )
 
                 pbar.set_description(
                     f"Training Epoch: {epoch}/{train_config.num_epochs}, step {step}/{len(train_dataloader)} completed (loss: {loss.detach().float()})"
@@ -257,6 +264,7 @@ def train(
                     save_checkpoint(
                         model=model,
                         optimizer=optimizer,
+                        scheduler=lr_scheduler,
                         train_config=train_config,
                         fsdp_config=fsdp_config,  # type: ignore
                         rank=rank if rank is not None else 0,
@@ -330,6 +338,7 @@ def train(
                     save_checkpoint(
                         model=model,
                         optimizer=optimizer,
+                        scheduler=lr_scheduler,
                         train_config=train_config,
                         fsdp_config=fsdp_config,  # type: ignore
                         rank=rank if rank is not None else 0,
@@ -570,21 +579,15 @@ def save_train_params(train_config, fsdp_config, rank):
     # Merge the two dictionaries into one
     train_params_dict = {**train_config_dict, **fsdp_config_dict}
     # Construct the folder name (following FSDP checkpointing style) using properties of the train_config object
-    folder_name: str = (
-        train_config.dist_checkpoint_root_folder
-        + "/"
-        + train_config.dist_checkpoint_folder
-        + "-"
-        + train_config.model_name
-    )
+    folder_name: str = train_config.save_checkpoint_path
 
-    save_dir = Path.cwd() / folder_name
+    save_dir = Path(folder_name)
     # If the directory does not exist, create it
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     # Convert the dictionary to a YAML string
-    config_yaml = yaml.dump(train_params_dict, indent=4)
-    file_name = os.path.join(save_dir, "train_params.yaml")
+    config_yaml: str = yaml.dump(train_params_dict, indent=4)
+    file_name: str = os.path.join(save_dir, "train_params.yaml")
 
     # Check if there's a directory with the same name as the file
     if os.path.isdir(file_name):

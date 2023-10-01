@@ -21,14 +21,11 @@ def set_config(wandb_configs: dict) -> None:
     wandb_configs["dataset"] = train_config.dataset
     wandb_configs["peft_method"] = train_config.peft_method
     wandb_configs["use_peft"] = train_config.use_peft
-    wandb_configs["output_dir"] = train_config.output_dir
     wandb_configs["freeze_layers"] = train_config.freeze_layers
     wandb_configs["num_freeze_layers"] = train_config.num_freeze_layers
     wandb_configs["quantization"] = train_config.quantization
     wandb_configs["one_gpu"] = train_config.one_gpu
     wandb_configs["save_model"] = train_config.save_model
-    wandb_configs["dist_checkpoint_root_folder"] = train_config.dist_checkpoint_root_folder
-    wandb_configs["dist_checkpoint_folder"] = train_config.dist_checkpoint_folder
     wandb_configs["save_optimizer"] = train_config.save_optimizer
     wandb_configs["use_fast_kernels"] = train_config.use_fast_kernels
     wandb_configs["use_mpi"] = train_config.use_mpi

@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import datetime
 import torch
 import time
+import os
 
 from torch.distributed.fsdp import (  # noqa: F401
     FullyShardedDataParallel as FSDP,  # type: ignore
@@ -28,9 +29,11 @@ import torch.distributed._shard.checkpoint as dist_cp
 import torch.distributed as dist
 
 from llama_recipes.configs import train_config
-from typing import Type, Any
+from typing import Type, Any, Optional
 
 from llama_recipes.configs.fsdp import fsdp_config
+from llama_recipes.utils.distributed import print_rank_0, is_rank_0
+from llama_recipes.policies import AnyPrecisionAdamW
 
 
 def get_date_of_run() -> str:
@@ -46,44 +49,54 @@ def get_date_of_run() -> str:
 fullstate_save_policy = FullStateDictConfig(offload_to_cpu=True, rank0_only=True)
 
 
-def load_model_sharded(model, rank: int, cfg: Type[train_config]) -> tuple[int, int, int]:
-    folder_name = (
-        cfg.dist_checkpoint_root_folder + "/" + cfg.dist_checkpoint_folder + "-" + cfg.model_name
-    )
+def load_model_sharded(
+    model,
+    optimizer: torch.optim.AdamW | AnyPrecisionAdamW,
+    scheduler: torch.optim.lr_scheduler.LRScheduler,
+    rank: int,
+    cfg: Type[train_config],
+) -> tuple[int, int, int]:
+    load_dir: str = cfg.load_checkpoint_path
 
-    load_dir = Path.cwd() / folder_name
-
-    if not load_dir.exists():
+    if not Path(load_dir).exists():
         if rank == 0:
             print("No sharded_state_dict checkpoint directory found...skipping")
         return 0, 0, 0
 
+    last_iteration: int = read_latest_value(f"{load_dir}/latest")
+
     if rank == 0:
-        print(f"loading model from model path: {load_dir} ")
-    reader = FileSystemReader(load_dir)
+        print(f"loading model from model path: {load_dir}, iteration: {last_iteration} ")
+    reader = FileSystemReader(
+        get_checkpoint_name(checkpoints_path=str(load_dir), iteration=last_iteration)
+    )
 
     with FSDP.state_dict_type(model, StateDictType.SHARDED_STATE_DICT):
-        checkpoint = {"model": model.state_dict()}
+        state_dict: dict[str, Any] = {"model": model.state_dict()}
         if rank == 0:
-            ck = checkpoint.keys()
+            ck = state_dict.keys()
             print(f" checkpoint key len = {len(ck)} and \n keys =  {ck}")
 
         dist_cp.load_state_dict(
-            state_dict=checkpoint,
+            state_dict=state_dict,
             storage_reader=reader,
         )
         if rank == 0:
             print("checkpoint after load_state_dict()")
-            ck = checkpoint.keys()
-            print(f" checkpoint key len = {len(ck)} and \n keys =  {ck}")
-        model.load_state_dict(checkpoint["model"])
+            ck = state_dict.keys()
+            # print(f" checkpoint key len = {len(state_dict)} and \n keys =  {state_dict}")
+        model.load_state_dict(state_dict["model"])
+        optimizer.load_state_dict(FSDP.optim_state_dict(model, optimizer))
 
     if rank == 0:
         print(f"Sharded state checkpoint loaded from {load_dir}")
 
-    epoch: int = checkpoint.get("epoch", 0)
-    iteration: int = checkpoint.get("iteration", 0)
-    consumed_tokens: int = checkpoint.get("consumed_tokens", 0)
+    scheduler.load_state_dict(state_dict["scheduler"])
+    epoch: int = state_dict.get("epoch", 0)
+    iteration: int = state_dict.get("iteration", 0)
+    consumed_tokens: int = state_dict.get("consumed_tokens", 0)
+    print_rank_0(f"epoch: {epoch}, iteration: {iteration}")
+
     return epoch, iteration, consumed_tokens
 
 
@@ -91,32 +104,39 @@ def save_model_and_optimizer_sharded(
     model,
     rank: int,
     cfg: Type[train_config],
-    optim=None,
-    epoch=None,
-    iteration=None,
-    consumed_tokens=None,
+    optimizer: Optional[torch.optim.AdamW | AnyPrecisionAdamW] = None,
+    scheduler: Optional[torch.optim.lr_scheduler.LRScheduler] = None,
+    epoch: Optional[int] = None,
+    iteration: Optional[int] = None,
+    consumed_tokens: Optional[int] = None,
 ) -> None:
     """
     save model and optimizer via sharded_state_dict to save_dir
+
+    Args:
+        model: モデル
+        rank: rank of distributed process
+        cfg: train config
+        optim: optimizer (AdamW)
     """
 
-    folder_name: str = (
-        cfg.dist_checkpoint_root_folder + "/" + cfg.dist_checkpoint_folder + "-" + cfg.model_name
-    )
-
-    save_dir = Path.cwd() / folder_name
+    save_dir: str = cfg.save_checkpoint_path
     if rank == 0:
         print(f"Saving model to {save_dir}")
 
     distributed_writer = dist_cp.FileSystemWriter(
-        save_dir,
+        get_checkpoint_name(
+            checkpoints_path=str(save_dir), iteration=iteration if iteration is not None else 0
+        )
     )
     t0 = time.perf_counter()
 
     with FSDP.state_dict_type(model, StateDictType.SHARDED_STATE_DICT):
         state_dict: dict[str, Any] = {"model": model.state_dict()}
-        if optim is not None:
-            state_dict["optim"] = FSDP.optim_state_dict(model, optim)
+        if optimizer is not None:
+            state_dict["optimizer"] = FSDP.optim_state_dict(model, optimizer)
+        if scheduler is not None:
+            state_dict["scheduler"] = scheduler.state_dict()
         if epoch is not None:
             state_dict["epoch"] = epoch
         if iteration is not None:
@@ -130,6 +150,12 @@ def save_model_and_optimizer_sharded(
             planner=DefaultSavePlanner(),
         )
     dist.barrier()
+
+    # 最新の checkpoint iteration を記録する
+    if is_rank_0():
+        with open(f"{save_dir}/latest", "w") as f:
+            f.write(str(iteration))
+
     t1 = time.perf_counter()
     if rank == 0:
         print(f"Sharded state checkpoint saved to {save_dir}, iteration={iteration}")
@@ -200,7 +226,7 @@ def save_optimizer_checkpoint(model, optimizer, rank, cfg, epoch=1):
 
     optim_state = FSDP.full_optim_state_dict(model, optimizer)
 
-    print(f"optim state dict ready on {rank} and len of {len(optim_state)}\n")
+    print_rank_0(f"optim state dict ready on {rank} and len of {len(optim_state)}\n")
 
     if rank == 0:
         folder_name = (
@@ -240,9 +266,9 @@ def load_optimizer_checkpoint(model, optimizer_checkpoint_path, rank: int) -> No
         full_osd = torch.load(optimizer_checkpoint_path)
 
     # called from all ranks, though only rank0 has a valid param for full_osd
-    sharded_osd = FSDP.scatter_full_optim_state_dict(  # noqa: F841
+    sharded_osd = FSDP.scatter_full_optim_state_dict(
         full_optim_state_dict=full_osd, model=model
-    )
+    )  # noqa: F841
 
     print(f"optimizer shard loaded on rank {rank}")
 
@@ -263,7 +289,8 @@ def load_sharded_model_single_gpu(model, model_path: str):
 
 def save_checkpoint(
     model,
-    optimizer,
+    optimizer: torch.optim.AdamW | AnyPrecisionAdamW,
+    scheduler: torch.optim.lr_scheduler.LRScheduler,
     train_config: Type[train_config],
     fsdp_config: Type[fsdp_config],
     rank: int,
@@ -274,21 +301,59 @@ def save_checkpoint(
         save_model_checkpoint(model, optimizer, rank, train_config, epoch=epoch)
         if not train_config.use_peft and train_config.save_optimizer:
             save_optimizer_checkpoint(model, optimizer, rank, train_config, epoch=epoch)
-            print(" Saving the FSDP model checkpoints and optimizer using FULL_STATE_DICT")
-            print("=====================================================")
+            print_rank_0(" Saving the FSDP model checkpoints and optimizer using FULL_STATE_DICT")
+            print_rank_0("=====================================================")
 
     # ABCI Llama-2 Continual Learning use below
     elif not train_config.use_peft and fsdp_config.checkpoint_type == StateDictType.SHARDED_STATE_DICT:  # type: ignore
         if train_config.save_optimizer:
-            print(f" Saving the FSDP model checkpoints and optimizer using SHARDED_STATE_DICT: rank: {rank}")
-            print("=====================================================")
-            save_model_and_optimizer_sharded(
-                model=model, rank=rank, cfg=train_config, optim=optimizer, iteration=iteration
+            print_rank_0(
+                f" Saving the FSDP model checkpoints and optimizer using SHARDED_STATE_DICT: rank: {rank}"
             )
-            print(f"saved model and optimizer checkpoint for epoch {epoch} and iteration {iteration}")
-            print("=====================================================")
+            print_rank_0("=====================================================")
+            save_model_and_optimizer_sharded(
+                model=model,
+                rank=rank,
+                cfg=train_config,
+                optimizer=optimizer,
+                scheduler=scheduler,
+                iteration=iteration,
+            )
+            print_rank_0(
+                f"saved model and optimizer checkpoint for epoch {epoch} and iteration {iteration}"
+            )
+            print_rank_0("=====================================================")
         else:
-            print(f" Saving the FSDP model checkpoints using SHARDED_STATE_DICT: rank: {rank}")
-            print("=====================================================")
+            print_rank_0(
+                f" Saving the FSDP model checkpoints using SHARDED_STATE_DICT: rank: {rank}"
+            )
+            print_rank_0("=====================================================")
             save_model_and_optimizer_sharded(model=model, rank=rank, cfg=train_config)  # type: ignore
-            print("=====================================================")
+            print_rank_0("=====================================================")
+
+
+def get_checkpoint_name(checkpoints_path: str, iteration: int) -> str:
+    """Determine the directory name for this rank's checkpoint.
+
+    Args:
+        checkpoints_path (str): チェックポイントの保存先
+        iteration (int): 学習のiteration
+
+    Returns:
+        str: チェエクポイント名
+    """
+    checkpoint_directory: str = "iter_{:07d}".format(iteration)
+    return os.path.join(checkpoints_path, checkpoint_directory)
+
+
+def read_latest_value(file_path: str) -> int:
+    try:
+        with open(file_path, "r") as file:
+            content = file.read().strip()  # `strip` removes any leading/trailing whitespace
+            return int(content)
+    except FileNotFoundError:
+        print(f"File not found: {file_path}")
+        raise
+    except ValueError:
+        print(f"Unable to convert file content to integer: {file_path}")
+        raise

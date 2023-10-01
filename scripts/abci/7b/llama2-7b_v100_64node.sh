@@ -1,6 +1,6 @@
 #!/bin/bash
-#$ -l rt_F=64
-#$ -l h_rt=24:00:00
+#$ -l rt_AF=4
+#$ -l h_rt=4:00:00
 #$ -j y
 #$ -o outputs/7b/
 #$ -cwd
@@ -87,6 +87,9 @@ mkdir -p $CHECKPOINTS_PATH
 # hugginface setting
 export HF_HOME=/scratch/$(whoami)/.cache/huggingface/
 
+# checkpoint path
+CHECKPOINTS_PATH=/groups/gaf51217/fujii/checkpoints/llama-recipes/llama-2-7b-gbs_${GLOBAL_BATCH_SIZE}
+
 # run
 mpirun -np $NUM_GPUS \
   --npernode $NUM_GPU_PER_NODE \
@@ -117,8 +120,8 @@ mpirun -np $NUM_GPUS \
   --num_workers_dataloader $NUM_WORKERS_DATALOADER \
   --save_model \
   --save_optimizer \
-  --dist_checkpoint_root_folder $CHECKPOINTS_PATH \
-  --dist_checkpoint_folder "${NODE_TYPE}_${NHOSTS}_FSDP_${NUM_GPUS}_GLOBAL_BATCH_SIZE_${GLOBAL_BATCH_SIZE}" \
+  --save_interval_iteration 50 \
+  --save_checkpoint_path $CHECKPOINTS_PATH \
   --use_mpi \
   --use_fast_kernels \
   --wandb_name "llama2-7b_${NODE_TYPE}_${NHOSTS}_FSDP_${NUM_GPUS}_GLOBAL_BATCH_SIZE_${GLOBAL_BATCH_SIZE}"

@@ -13,6 +13,7 @@ class train_config:
     run_validation: bool = True
     batch_size_training: int = 4
     gradient_accumulation_steps: int = 1
+    clip_grad_norm: float = 1.0
     num_epochs: int = 1
     num_workers_dataloader: int = 1
     lr: float = 1e-4
@@ -39,8 +40,6 @@ class train_config:
     quantization: bool = False
     one_gpu: bool = False
     save_model: bool = True
-    dist_checkpoint_root_folder: str = "PATH/to/save/FSDP/model"  # will be used if using FSDP
-    dist_checkpoint_folder: str = ""  # will be used if using FSDP
     save_checkpoint_path: str = ""
     save_optimizer: bool = True  # will be used if using FSDP
     load_checkpoint_path: str = ""

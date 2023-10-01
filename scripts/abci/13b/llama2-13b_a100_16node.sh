@@ -1,8 +1,8 @@
 #!/bin/bash
-#$ -l rt_AF=30
-#$ -l h_rt=24:00:00
+#$ -l rt_AF=16
+#$ -l h_rt=4:00:00
 #$ -j y
-#$ -o outputs/
+#$ -o outputs/13B/
 #$ -cwd
 
 # module load
@@ -34,6 +34,8 @@ else
   echo "Unrecognized SGE_RESOURCE_TYPE: $SGE_RESOURCE_TYPE"
 fi
 
+echo "GPU NODE TYPE: ${NODE_TYPE}, NUM_GPU_PER_NODE: ${NUM_GPU_PER_NODE}"
+
 NUM_NODES=$NHOSTS
 NUM_GPUS=$((${NUM_NODES} * ${NUM_GPU_PER_NODE}))
 
@@ -57,7 +59,7 @@ export CUDA_LAUNCH_BLOCKING=0
 NUM_EPOCHS=1
 
 # batch size
-BATCH_SIZE=1
+BATCH_SIZE=2
 GLOBAL_BATCH_SIZE=1024
 GRADIENT_ACCUMULATION_STEPS=$((GLOBAL_BATCH_SIZE / (BATCH_SIZE * NUM_GPUS)))
 
@@ -81,14 +83,14 @@ SEED=42
 NUM_WORKERS_DATALOADER=2
 
 # checkpoint path
-CHECKPOINTS_PATH=/groups/gaf51217/fujii/checkpoints/llama-2-70b/llama-recipies
+CHECKPOINTS_PATH=/groups/gaf51217/fujii/checkpoints/llama-2-13b/llama-recipies
 mkdir -p $CHECKPOINTS_PATH
 
 # hugginface setting
 export HF_HOME=/scratch/$(whoami)/.cache/huggingface/
 
 # checkpoint path
-CHECKPOINTS_PATH=/groups/gaf51217/fujii/checkpoints/llama-recipes/llama-2-70b-gbs_${GLOBAL_BATCH_SIZE}
+CHECKPOINTS_PATH=/groups/gaf51217/fujii/checkpoints/llama-recipes/llama-2-13b-gbs_${GLOBAL_BATCH_SIZE}
 
 # run
 mpirun -np $NUM_GPUS \
@@ -103,9 +105,9 @@ mpirun -np $NUM_GPUS \
   --low_cpu_fsdp \
   --peft_method None \
   --mixed_precision \
-  --pure_bf16 \
+  --use_fp16 \
   --num_epochs $NUM_EPOCHS \
-  --model_name /groups/gaf51217/fujii/finetune/llama2/Llama-2-70b-hf \
+  --model_name /groups/gaf51217/fujii/finetune/llama2/Llama-2-13b-hf \
   --batch_size_training $BATCH_SIZE \
   --gradient_accumulation_steps $GRADIENT_ACCUMULATION_STEPS \
   --lr $LR \
@@ -124,4 +126,4 @@ mpirun -np $NUM_GPUS \
   --save_checkpoint_path $CHECKPOINTS_PATH \
   --use_mpi \
   --use_fast_kernels \
-  --wandb_name "llama2-70b_${NODE_TYPE}_${NHOSTS}_FSDP_${NUM_GPUS}_GLOBAL_BATCH_SIZE_${GLOBAL_BATCH_SIZE}"
+  --wandb_name "llama2-13b_${NODE_TYPE}_${NHOSTS}_FSDP_${NUM_GPUS}_GLOBAL_BATCH_SIZE_${GLOBAL_BATCH_SIZE}"
