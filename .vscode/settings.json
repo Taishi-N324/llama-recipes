@@ -1,5 +1,6 @@
 {
   "cSpell.words": [
+    "ABCI",
     "alloc",
     "backpropagation",
     "bettertransformer",
@@ -8,6 +9,7 @@
     "Concatenator",
     "finetuning",
     "fugaku",
+    "fullstate",
     "hostfile",
     "memtrace",
     "mpiexec",
@@ -34,5 +36,6 @@
     "**/bitsandbytes/**": true,
     "**/__pycache__/**": true,
     "**/wandb/**": true,
+    "**/hostfile/**": true,
   }
 }
