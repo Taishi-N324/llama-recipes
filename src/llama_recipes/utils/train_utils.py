@@ -146,7 +146,9 @@ def train(
             )
 
             accumulation_loss: float = 0.0
-            for step, batch in enumerate(train_dataloader, start=last_iteration):
+            for step, batch in enumerate(
+                train_dataloader, start=last_iteration * gradient_accumulation_steps
+            ):
                 wandb_iteration: int = (
                     epoch * len(train_dataloader) + step // gradient_accumulation_steps
                 )
@@ -281,13 +283,14 @@ def train(
 
                     print("------------------------------------------------------------------")
                     print(f"iteration: {wandb_iteration} , tflops: {tflops}")
-                    print("------------------------------------------------------------------", flush=True)
+                    print(
+                        "------------------------------------------------------------------",
+                        flush=True,
+                    )
 
                 if (
-                    wandb_iteration % train_config.save_interval_iteration == 0
-                    and wandb_iteration != 0
-                    and not train_config.use_peft
-                ):
+                    wandb_iteration + 1
+                ) % train_config.save_interval_iteration == 0 and not train_config.use_peft:
                     if train_config.enable_fsdp:
                         torch_distributed.barrier()
 
@@ -299,7 +302,7 @@ def train(
                         fsdp_config=fsdp_config,  # type: ignore
                         rank=rank if rank is not None else 0,
                         epoch=epoch,
-                        iteration=wandb_iteration,
+                        iteration=wandb_iteration + 1,
                     )
 
                     if train_config.enable_fsdp:
