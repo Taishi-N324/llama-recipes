@@ -57,7 +57,7 @@ done < "$SGE_JOB_HOSTLIST" > "$HOSTFILE_NAME"
 NUM_EPOCHS=1
 
 # batch size
-BATCH_SIZE=2
+BATCH_SIZE=4
 GLOBAL_BATCH_SIZE=1024
 GRADIENT_ACCUMULATION_STEPS=$((GLOBAL_BATCH_SIZE / (BATCH_SIZE * NUM_GPUS)))
 
@@ -101,6 +101,7 @@ mpirun -np $NUM_GPUS \
   python examples/finetuning.py \
   --enable_fsdp \
   --low_cpu_fsdp \
+  --fsdp_cpu_offload \
   --peft_method None \
   --mixed_precision \
   --pure_bf16 \
