@@ -12,6 +12,11 @@ def set_config(wandb_configs: dict) -> None:
     wandb_configs["num_epochs"] = train_config.num_epochs
     wandb_configs["num_workers_dataloader"] = train_config.num_workers_dataloader
     wandb_configs["lr"] = train_config.lr
+    wandb_configs["lr_min"] = train_config.lr_min
+    wandb_configs["lr_decay"] = train_config.lr_decay
+    wandb_configs["lr_warmup"] = train_config.lr_warmup
+    wandb_configs["lr_decay_style"] = train_config.lr_decay_style
+    wandb_configs["use_sequence_length_schedule"] = train_config.use_sequence_length_schedule
     wandb_configs["weight_decay"] = train_config.weight_decay
     wandb_configs["gamma"] = train_config.gamma
     wandb_configs["seed"] = train_config.seed
@@ -38,3 +43,4 @@ def set_config(wandb_configs: dict) -> None:
     wandb_configs["fsdp_activation_checkpointing"] = fsdp_config.fsdp_activation_checkpointing
     wandb_configs["pure_bf16"] = fsdp_config.pure_bf16
     wandb_configs["optimizer"] = fsdp_config.optimizer
+    wandb_configs["fsdp_cpu_offload"] = fsdp_config.fsdp_cpu_offload
