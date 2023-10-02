@@ -18,3 +18,4 @@ class fsdp_config:
     fsdp_activation_checkpointing: bool = True
     pure_bf16: bool = False
     optimizer: str = "AdamW"
+    fsdp_cpu_offload: bool = False

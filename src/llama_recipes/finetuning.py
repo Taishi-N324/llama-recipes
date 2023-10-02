@@ -6,6 +6,7 @@ import os
 import fire
 import torch
 import torch.distributed as torch_distributed
+from torch.distributed.fsdp.fully_sharded_data_parallel import CPUOffload  # type: ignore
 import torch.optim as optim
 import wandb
 import typing
@@ -183,6 +184,7 @@ def main(**kwargs) -> None:
         model = FSDP(
             model,
             auto_wrap_policy=my_auto_wrapping_policy if train_config.use_peft else wrapping_policy,
+            cpu_offload=CPUOffload(offload_params=True) if fsdp_config.fsdp_cpu_offload else None,
             mixed_precision=mixed_precision_policy if not fsdp_config.pure_bf16 else None,
             sharding_strategy=fsdp_config.sharding_strategy,
             device_id=torch.cuda.current_device(),
