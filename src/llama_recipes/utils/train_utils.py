@@ -6,7 +6,7 @@ import time
 import yaml
 from pathlib import Path
 from pkg_resources import packaging  # type: ignore
-
+from contextlib import nullcontext
 
 import torch
 import torch.cuda.nccl as nccl
@@ -79,6 +79,7 @@ def train(
         scaler = torch.cuda.amp.GradScaler()
     if train_config.enable_fsdp:
         world_size = int(os.environ["WORLD_SIZE"])
+    autocast = torch.cuda.amp.autocast if train_config.use_fp16 else nullcontext
 
     train_prep: list[torch.Tensor] = []  # train perplexity
     train_loss: list[float] = []  # train loss
@@ -153,7 +154,8 @@ def train(
                     else:
                         batch[key] = batch[key].to("cuda:0")
 
-                loss = model(**batch).loss
+                with autocast():
+                    loss = model(**batch).loss
                 loss = loss / gradient_accumulation_steps
                 total_loss += loss.detach().float()
                 if train_config.use_fp16:
