@@ -89,6 +89,7 @@ export HF_HOME=/scratch/$(whoami)/.cache/huggingface/
 
 # checkpoint path
 CHECKPOINTS_PATH=/groups/gaf51217/fujii/checkpoints/llama-recipes/llama-2-70b-gbs_${GLOBAL_BATCH_SIZE}
+mkdir -p $CHECKPOINTS_PATH
 
 # run
 mpirun -np $NUM_GPUS \
