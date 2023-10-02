@@ -146,7 +146,7 @@ def main(**kwargs) -> None:
         try:
             from optimum.bettertransformer import BetterTransformer
 
-            model = BetterTransformer.transform(model)
+            model = BetterTransformer.transform(model)  # type: ignore
         except ImportError:
             print("Module 'optimum' not found. Please install 'optimum' it before proceeding.")
     print_model_size(model, train_config, rank if train_config.enable_fsdp else 0)  # type: ignore
@@ -169,7 +169,7 @@ def main(**kwargs) -> None:
     if train_config.use_peft:
         print(f"Using PEFT method: {train_config.peft_method}", flush=True)
         peft_config = generate_peft_config(train_config, kwargs)
-        model = get_peft_model(model, peft_config)
+        model = get_peft_model(model, peft_config)  # type: ignore
         model.print_trainable_parameters()
 
     # setting up FSDP if enable_fsdp is enabled
@@ -182,7 +182,7 @@ def main(**kwargs) -> None:
         my_auto_wrapping_policy = fsdp_auto_wrap_policy(model, LlamaDecoderLayer)
 
         model = FSDP(
-            model,
+            model,  # type: ignore
             auto_wrap_policy=my_auto_wrapping_policy if train_config.use_peft else wrapping_policy,
             cpu_offload=CPUOffload(offload_params=True) if fsdp_config.fsdp_cpu_offload else None,
             mixed_precision=mixed_precision_policy if not fsdp_config.pure_bf16 else None,
@@ -190,7 +190,7 @@ def main(**kwargs) -> None:
             device_id=torch.cuda.current_device(),
             limit_all_gathers=True,
             sync_module_states=train_config.low_cpu_fsdp,
-            param_init_fn=lambda module: module.to_empty(
+            param_init_fn=lambda module: module.to_empty(  # type: ignore
                 device=torch.device("cuda"), recurse=False
             )
             if train_config.low_cpu_fsdp and rank != 0
@@ -211,7 +211,7 @@ def main(**kwargs) -> None:
     )
 
     if not train_config.enable_fsdp or rank == 0:
-        print(f"--> Training Set Length = {len(dataset_train)}")
+        print(f"--> Training Set Length = {len(dataset_train)}")  # type: ignore
 
     dataset_val = get_preprocessed_dataset(
         tokenizer,
@@ -219,7 +219,7 @@ def main(**kwargs) -> None:
         split="test",
     )
     if not train_config.enable_fsdp or rank == 0:
-        print(f"--> Validation Set Length = {len(dataset_val)}")
+        print(f"--> Validation Set Length = {len(dataset_val)}")  # type: ignore
 
     train_sampler = None
     val_sampler = None
