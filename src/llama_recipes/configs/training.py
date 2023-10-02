@@ -43,7 +43,7 @@ class train_config:
     save_checkpoint_path: str = ""
     save_optimizer: bool = True  # will be used if using FSDP
     load_checkpoint_path: str = ""
-    save_interval_iteration: int = 50
-    use_fast_kernels: bool = False  # Enable using SDPA from PyTorch Accelerated Transformers, make use Flash Attention and Xformer memory-efficient kernels
+    save_interval_iteration: int = 100
+    use_fast_kernels: bool = True  # Enable using SDPA from PyTorch Accelerated Transformers, make use Flash Attention and Xformer memory-efficient kernels
     use_mpi: bool = False
     wandb_name: Optional[str] = None

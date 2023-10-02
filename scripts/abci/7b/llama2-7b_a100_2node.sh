@@ -101,9 +101,10 @@ mpirun -np $NUM_GPUS \
   python examples/finetuning.py \
   --enable_fsdp \
   --low_cpu_fsdp \
+  --fsdp_cpu_offload \
   --peft_method None \
   --mixed_precision \
-  --use_fp16 \
+  --pure_bf16 \
   --num_epochs $NUM_EPOCHS \
   --model_name /groups/gaf51217/fujii/finetune/llama2/Llama-2-7b-hf \
   --batch_size_training $BATCH_SIZE \
@@ -120,7 +121,7 @@ mpirun -np $NUM_GPUS \
   --num_workers_dataloader $NUM_WORKERS_DATALOADER \
   --save_model \
   --save_optimizer \
-  --save_interval_iteration 50 \
+  --save_interval_iteration 500 \
   --save_checkpoint_path $CHECKPOINTS_PATH \
   --use_mpi \
   --use_fast_kernels \

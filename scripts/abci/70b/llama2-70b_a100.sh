@@ -1,8 +1,8 @@
 #!/bin/bash
-#$ -l rt_AF=30
+#$ -l rt_AF=28
 #$ -l h_rt=24:00:00
 #$ -j y
-#$ -o outputs/
+#$ -o outputs/70B/
 #$ -cwd
 
 # module load
@@ -101,6 +101,7 @@ mpirun -np $NUM_GPUS \
   python examples/finetuning.py \
   --enable_fsdp \
   --low_cpu_fsdp \
+  --fsdp_cpu_offload \
   --peft_method None \
   --mixed_precision \
   --pure_bf16 \

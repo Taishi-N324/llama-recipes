@@ -20,13 +20,18 @@ from torch.distributed._shard.checkpoint import (  # noqa: F401
     save_state_dict,
     load_state_dict,
 )
+from torch.distributed.checkpoint.metadata import (
+    STATE_DICT_TYPE
+)
 from torch.distributed.checkpoint.default_planner import (  # noqa: F401
     DefaultSavePlanner,
     DefaultLoadPlanner,
 )
-
-import torch.distributed._shard.checkpoint as dist_cp
-import torch.distributed as dist
+from torch.distributed.checkpoint.optimizer import (
+    load_sharded_optimizer_state_dict,
+)
+import torch.distributed.checkpoint as dist_cp
+import torch.distributed as torch_distributed
 
 from llama_recipes.configs import train_config
 from typing import Type, Any, Optional
@@ -50,7 +55,7 @@ fullstate_save_policy = FullStateDictConfig(offload_to_cpu=True, rank0_only=True
 
 
 def load_model_sharded(
-    model,
+    model: FSDP,
     optimizer: torch.optim.AdamW | AnyPrecisionAdamW,
     scheduler: torch.optim.lr_scheduler.LRScheduler,
     rank: int,
@@ -101,7 +106,7 @@ def load_model_sharded(
 
 
 def save_model_and_optimizer_sharded(
-    model,
+    model: FSDP,
     rank: int,
     cfg: Type[train_config],
     optimizer: Optional[torch.optim.AdamW | AnyPrecisionAdamW] = None,
@@ -149,6 +154,10 @@ def save_model_and_optimizer_sharded(
             storage_writer=distributed_writer,
             planner=DefaultSavePlanner(),
         )
+        if rank == 0:
+            print("checkpoint after save_state_dict()")
+            ck = state_dict.keys()
+            print(f" checkpoint key len = {len(ck)} and \n keys =  {ck}")
     dist.barrier()
 
     # 最新の checkpoint iteration を記録する

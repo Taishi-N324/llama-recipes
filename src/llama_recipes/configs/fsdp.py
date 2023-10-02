@@ -3,8 +3,8 @@
 
 from dataclasses import dataclass
 
-from torch.distributed.fsdp import ShardingStrategy
-from torch.distributed.fsdp.fully_sharded_data_parallel import StateDictType
+from torch.distributed.fsdp import ShardingStrategy  # type: ignore
+from torch.distributed.fsdp.fully_sharded_data_parallel import StateDictType  # type: ignore
 
 
 @dataclass
