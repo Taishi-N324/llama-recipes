@@ -48,6 +48,9 @@ from llama_recipes.optimizer import WarmupCosineAnnealingLR
 
 
 def main(**kwargs) -> None:
+    # logging 設定
+    logging.basicConfig(level=logging.WARNING)
+
     # Update the configuration for the training and sharding process
     update_config((train_config, fsdp_config), **kwargs)  # type: ignore
 
