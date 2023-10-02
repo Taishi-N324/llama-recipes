@@ -22,7 +22,7 @@ source .env/bin/activate
 pip install --upgrade pip
 
 # install pytorch (nightly)
-pip install --pre torch --index-url https://download.pytorch.org/whl/nightly/cu118
+pip install --pre torch==2.1.0.dev20230905+cu118 --index-url https://download.pytorch.org/whl/nightly/cu118
 
 # pip install requirements
 pip install -r requirements.txt
