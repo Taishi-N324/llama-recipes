@@ -281,10 +281,15 @@ def main(**kwargs) -> None:
     lr_warmup_iterations: learning rateがwarmupしきるのにかかるiterations
     lr_decay_iterations: learning rate が cosineで落ちきるのにかかるiterations
     """
-    estimated_total_iterations: int = train_config.num_epochs * len(train_dataloader)
+    estimated_total_iterations: int = (
+        train_config.num_epochs * len(train_dataloader) // train_config.gradient_accumulation_steps
+    )
     lr_warmup_iterations: int = int(estimated_total_iterations * train_config.lr_warmup)
     lr_decay_iterations: int = int(estimated_total_iterations * train_config.lr_decay)
+
+    # wandb config update
     if train_config.wandb_name is not None and rank == 0:
+        # iteration info
         wandb.config.update(
             {
                 "total_iteration": estimated_total_iterations,

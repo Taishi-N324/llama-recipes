@@ -70,16 +70,16 @@ def train(
     """
     # possibly unbound error 解消のため default値を設定
     world_size: int = 1
-    local_rank = 0
+    local_rank = local_rank if local_rank is not None else 0
 
     # Create a gradient scaler for fp16
     if train_config.use_fp16 and train_config.enable_fsdp:
         scaler = ShardedGradScaler()
     elif train_config.use_fp16 and not train_config.enable_fsdp:
-        scaler = torch.cuda.amp.GradScaler()
+        scaler = torch.cuda.amp.GradScaler()  # type: ignore
     if train_config.enable_fsdp:
         world_size = int(os.environ["WORLD_SIZE"])
-    autocast = torch.cuda.amp.autocast if train_config.use_fp16 else nullcontext
+    autocast = torch.cuda.amp.autocast if train_config.use_fp16 else nullcontext  # type: ignore
 
     train_prep: list[torch.Tensor] = []  # train perplexity
     train_loss: list[float] = []  # train loss
@@ -133,6 +133,7 @@ def train(
 
     for epoch in range(last_epoch, train_config.num_epochs):
         epoch_start_time = time.perf_counter()
+        iteration_start_time = time.perf_counter()
         with MemoryTrace() as memtrace:  # track the memory usage
             model.train()
             total_loss: float = 0.0
@@ -144,9 +145,11 @@ def train(
                 disable=(rank != 0),
             )
 
+            accumulation_loss: float = 0.0
             for step, batch in enumerate(train_dataloader, start=last_iteration):
-                wandb_steps: int = epoch * len(train_dataloader) + step
-                step_start_time = time.perf_counter()
+                wandb_iteration: int = (
+                    epoch * len(train_dataloader) + step // gradient_accumulation_steps
+                )
 
                 for key in batch.keys():
                     if train_config.enable_fsdp:
@@ -158,6 +161,11 @@ def train(
                     loss = model(**batch).loss
                 loss = loss / gradient_accumulation_steps
                 total_loss += loss.detach().float()
+
+                # accumulate loss for logging
+                if rank == 0 and train_config.wandb_name:
+                    accumulation_loss += loss.detach().float()
+
                 if train_config.use_fp16:
                     # if fp16 is enabled, use gradient scaler to handle gradient update
                     scaler.scale(loss).backward()  # type: ignore
@@ -167,6 +175,7 @@ def train(
                         scaler.step(optimizer)  # type: ignore (suppress ubound error)
                         scaler.update()  # type: ignore (suppress ubound error)
                         optimizer.zero_grad()
+                        lr_scheduler.step()
                         pbar.update(step // gradient_accumulation_steps)
                 else:
                     # regular backpropagation when fp16 is not used
@@ -176,31 +185,39 @@ def train(
                     ) - 1:
                         optimizer.step()
                         optimizer.zero_grad()
+                        lr_scheduler.step()
                         pbar.update(step // gradient_accumulation_steps)
 
                 # gradient clipping
                 if train_config.clip_grad_norm > 0:
-                    clip_grad_norm_(
-                        model.parameters(), train_config.clip_grad_norm
-                    )
+                    clip_grad_norm_(model.parameters(), train_config.clip_grad_norm)
 
                 pbar.set_description(
-                    f"Training Epoch: {epoch}/{train_config.num_epochs}, step {step}/{len(train_dataloader)} completed (loss: {loss.detach().float()})"
+                    f"Training Epoch: {epoch}/{train_config.num_epochs}, step {step}/{len(train_dataloader)} completed (loss: {loss.detach().float() * gradient_accumulation_steps}, lr: {optimizer.param_groups[0]['lr']:.6f}, accumulation_step: {step % gradient_accumulation_steps + 1}/{gradient_accumulation_steps}, iteration: {wandb_iteration})"
                 )
 
-                if rank == 0 and train_config.wandb_name:
+                if (
+                    rank == 0
+                    and train_config.wandb_name
+                    and (step + 1) % gradient_accumulation_steps == 0
+                    or step == len(train_dataloader) - 1
+                ):
+                    # gradient accumulation stepsごとにwandbにログを送る
                     wandb_stats: dict[str, Any] = {}
 
                     # training info
-                    wandb_stats["training/loss"] = loss
-                    wandb_stats["training/perplexity"] = torch.exp(loss)
+                    wandb_stats["training/loss"] = accumulation_loss
+                    wandb_stats["training/perplexity"] = torch.exp(accumulation_loss)  # type: ignore
+                    accumulation_loss = 0.0
 
                     # utils info
                     batch_size: int = batch["input_ids"].shape[0]
                     sequence_length: int = batch["input_ids"].shape[1]
 
                     wandb_stats["utils/batch_size"] = batch_size
-                    wandb_stats["utils/global_batch_size"] = batch_size * world_size
+                    wandb_stats["utils/global_batch_size"] = (
+                        batch_size * world_size * gradient_accumulation_steps
+                    )
                     wandb_stats["utils/seq_len"] = sequence_length
                     wandb_stats["utils/gradient_accumulation_steps"] = gradient_accumulation_steps
                     wandb_stats["utils/epoch"] = epoch
@@ -210,9 +227,17 @@ def train(
                     wandb_stats["optimizer/lr"] = optimizer.param_groups[0]["lr"]
 
                     # stats
-                    step_elapsed_time = time.perf_counter() - step_start_time
-                    tokens_per_sec = batch_size * sequence_length / step_elapsed_time * world_size
-                    wandb_stats["stats/1_iteration_time"] = step_elapsed_time
+                    iteration_elapsed_time = time.perf_counter() - iteration_start_time
+                    iteration_start_time = time.perf_counter()
+
+                    tokens_per_sec = (
+                        batch_size
+                        * sequence_length
+                        * gradient_accumulation_steps
+                        / iteration_elapsed_time
+                        * world_size
+                    )
+                    wandb_stats["stats/1_iteration_time"] = iteration_elapsed_time
                     wandb_stats["stats/tokens_pef_sec"] = tokens_per_sec
                     wandb_stats["stats/30B_tokens_day"] = (
                         30 * (1000**3) / tokens_per_sec / 60 / 60 / 24
@@ -223,9 +248,7 @@ def train(
                     wandb_stats["stats/1T_tokens_day"] = (
                         (1000**4) / tokens_per_sec / 60 / 60 / 24
                     )
-                    wandb_stats["stats/tokens_per_sec_per_gpu"] = (
-                        batch_size * sequence_length / step_elapsed_time
-                    )
+                    wandb_stats["stats/tokens_per_sec_per_gpu"] = tokens_per_sec / world_size
 
                     checkpoint_activations_factor = 3
                     if (
@@ -243,6 +266,7 @@ def train(
                         * checkpoint_activations_factor
                         * batch_size
                         * sequence_length
+                        * gradient_accumulation_steps
                         * num_layers
                         * (hidden_size**2)
                     ) * (
@@ -250,14 +274,18 @@ def train(
                         + (sequence_length / (6.0 * hidden_size))
                         + (vocab_size / (16.0 * num_layers * hidden_size))
                     )
-                    tflops: float = flops_per_iteration / (step_elapsed_time * (10**12))
+                    tflops: float = flops_per_iteration / (iteration_elapsed_time * (10**12))
                     wandb_stats["stats/tflops"] = tflops
 
-                    wandb.log(wandb_stats, step=wandb_steps)
+                    wandb.log(wandb_stats, step=wandb_iteration)
+
+                    print("------------------------------------------------------------------")
+                    print(f"iteration: {wandb_iteration} , tflops: {tflops}")
+                    print("------------------------------------------------------------------", flush=True)
 
                 if (
-                    wandb_steps % train_config.save_interval_iteration == 0
-                    and wandb_steps != 0
+                    wandb_iteration % train_config.save_interval_iteration == 0
+                    and wandb_iteration != 0
                     and not train_config.use_peft
                 ):
                     if train_config.enable_fsdp:
@@ -271,14 +299,11 @@ def train(
                         fsdp_config=fsdp_config,  # type: ignore
                         rank=rank if rank is not None else 0,
                         epoch=epoch,
-                        iteration=wandb_steps,
+                        iteration=wandb_iteration,
                     )
 
                     if train_config.enable_fsdp:
                         torch_distributed.barrier()
-
-                # lr scheduler step
-                lr_scheduler.step()
 
         epoch_end_time = time.perf_counter() - epoch_start_time
         epoch_times.append(epoch_end_time)
