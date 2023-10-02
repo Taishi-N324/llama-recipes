@@ -7,7 +7,7 @@ from typing import Optional
 
 @dataclass
 class train_config:
-    model_name: str = "PATH/to/LLAMA/7B"
+    model_name: str = "llama-2-7b"
     enable_fsdp: bool = False
     low_cpu_fsdp: bool = False
     run_validation: bool = True
