@@ -1,5 +1,5 @@
 #!/bin/bash
-#$ -l rt_AF=4
+#$ -l rt_F=64
 #$ -l h_rt=4:00:00
 #$ -j y
 #$ -o outputs/7b/
