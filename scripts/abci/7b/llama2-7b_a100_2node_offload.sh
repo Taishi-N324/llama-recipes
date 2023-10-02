@@ -88,7 +88,8 @@ mkdir -p $CHECKPOINTS_PATH
 export HF_HOME=/scratch/$(whoami)/.cache/huggingface/
 
 # checkpoint path
-CHECKPOINTS_PATH=/groups/gaf51217/fujii/checkpoints/llama-recipes/llama-2-7b-gbs_${GLOBAL_BATCH_SIZE}_${NODE_TYPE}_${NHOSTS}
+CHECKPOINTS_PATH=/groups/gaf51217/fujii/checkpoints/llama-recipes/llama-2-7b-gbs_${GLOBAL_BATCH_SIZE}_${NODE_TYPE}_${NHOSTS}_offload
+mkdir -p $CHECKPOINTS_PATH
 
 # run
 mpirun -np $NUM_GPUS \

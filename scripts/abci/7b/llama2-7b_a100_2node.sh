@@ -57,7 +57,7 @@ done < "$SGE_JOB_HOSTLIST" > "$HOSTFILE_NAME"
 NUM_EPOCHS=1
 
 # batch size
-BATCH_SIZE=2
+BATCH_SIZE=4
 GLOBAL_BATCH_SIZE=1024
 GRADIENT_ACCUMULATION_STEPS=$((GLOBAL_BATCH_SIZE / (BATCH_SIZE * NUM_GPUS)))
 
@@ -89,6 +89,7 @@ export HF_HOME=/scratch/$(whoami)/.cache/huggingface/
 
 # checkpoint path
 CHECKPOINTS_PATH=/groups/gaf51217/fujii/checkpoints/llama-recipes/llama-2-7b-gbs_${GLOBAL_BATCH_SIZE}_${NODE_TYPE}_${NHOSTS}
+mkdir -p $CHECKPOINTS_PATH
 
 # run
 mpirun -np $NUM_GPUS \
@@ -120,7 +121,7 @@ mpirun -np $NUM_GPUS \
   --num_workers_dataloader $NUM_WORKERS_DATALOADER \
   --save_model \
   --save_optimizer \
-  --save_interval_iteration 500 \
+  --save_interval_iteration 10 \
   --save_checkpoint_path $CHECKPOINTS_PATH \
   --use_mpi \
   --use_fast_kernels \
