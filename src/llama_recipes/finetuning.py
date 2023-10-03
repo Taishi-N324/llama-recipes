@@ -56,6 +56,8 @@ def main(**kwargs) -> None:
     update_config((train_config, fsdp_config), **kwargs)  # type: ignore
 
     # Set the seeds for reproducibility
+    random.seed(train_config.seed)
+    np.random.seed(train_config.seed)
     torch.cuda.manual_seed(train_config.seed)
     torch.manual_seed(train_config.seed)
 
