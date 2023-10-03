@@ -203,7 +203,9 @@ def train(
 
                     # training info
                     wandb_stats["training/loss"] = accumulation_loss
-                    wandb_stats["training/perplexity"] = torch.exp(torch.tensor(accumulation_loss))  # type: ignore
+                    wandb_stats["training/perplexity"] = torch.exp(
+                        torch.tensor(accumulation_loss).detach()
+                    )
                     accumulation_loss = 0.0
 
                     # utils info
@@ -224,21 +226,30 @@ def train(
                     optimizer_states_2: list[float] = [0.0] * 4
 
                     for param_group in optimizer.param_groups:
-                        for param in param_group:
+                        for param in param_group["params"]:
+                            # optimizer state が空の場合は logging しない
+                            if not optimizer.state:
+                                continue
+
                             optimizer_states_1[0] += (
-                                torch.norm(optimizer.state[param]["exp_avg_sq"]).item()) ** 2  # type: ignore
+                                torch.norm(optimizer.state[param]["exp_avg_sq"]).item()
+                            ) ** 2  # type: ignore
                             optimizer_states_1[1] += (
                                 torch.norm(optimizer.state[param]["exp_avg_sq"].sqrt()).item()  # type: ignore
                             ) ** 2
                             optimizer_states_1[2] += (
-                                torch.norm(optimizer.state[param]["exp_avg"]).item()) ** 2  # type: ignore
+                                torch.norm(optimizer.state[param]["exp_avg"]).item()
+                            ) ** 2  # type: ignore
                             optimizer_states_1[3] += (torch.norm(param).item()) ** 2  # type: ignore
                             optimizer_states_1[4] += torch.norm(
-                                optimizer.state[param]["exp_avg_sq"], p=1).item()  # type: ignore
+                                optimizer.state[param]["exp_avg_sq"], p=1
+                            ).item()  # type: ignore
                             optimizer_states_1[5] += torch.norm(
-                                optimizer.state[param]["exp_avg_sq"].sqrt(), p=1).item()  # type: ignore
+                                optimizer.state[param]["exp_avg_sq"].sqrt(), p=1
+                            ).item()  # type: ignore
                             optimizer_states_1[6] += torch.norm(
-                                optimizer.state[param]["exp_avg"], p=1).item()  # type: ignore
+                                optimizer.state[param]["exp_avg"], p=1
+                            ).item()  # type: ignore
                             optimizer_states_1[7] += torch.norm(param, p=1).item()
                             optimizer_states_2[0] = max(
                                 optimizer_states_2[0],  # type: ignore
@@ -247,7 +258,7 @@ def train(
                             )
                             optimizer_states_2[1] = max(
                                 optimizer_states_2[1],
-                                optimizer.state[param]["exp_avg_sq"].sqrt().abs_().max().item()  # type: ignore
+                                optimizer.state[param]["exp_avg_sq"].sqrt().abs_().max().item(),  # type: ignore
                             )
                             optimizer_states_2[2] = max(
                                 optimizer_states_2[2],  # type: ignore
@@ -257,20 +268,22 @@ def train(
                             optimizer_states_2[3] = max(
                                 optimizer_states_2[3],
                                 abs(param.max().item()),  # type: ignore
-                                abs(param.min().item())  # type: ignore
+                                abs(param.min().item()),  # type: ignore
                             )
-                    wandb_stats['optimizer/variance_l2'] = optimizer_states_1[0]**0.5
-                    wandb_stats['optimizer/variance_sqrt_l2'] = optimizer_states_1[1]**0.5
-                    wandb_stats['optimizer/momentum_l2'] = optimizer_states_1[2]**0.5
-                    wandb_stats['optimizer/weight_l2'] = optimizer_states_1[3]**0.5
-                    wandb_stats['optimizer/variance_l1'] = optimizer_states_1[4]
-                    wandb_stats['optimizer/variance_sqrt_l1'] = optimizer_states_1[5]
-                    wandb_stats['optimizer/momentum_l1'] = optimizer_states_1[6]
-                    wandb_stats['optimizer/weight_l1'] = optimizer_states_1[7]
-                    wandb_stats['optimizer/variance_abs_max'] = optimizer_states_2[0]
-                    wandb_stats['optimizer/variance_sqrt_abs_max'] = optimizer_states_2[1]
-                    wandb_stats['optimizer/momentum_abs_max'] = optimizer_states_2[2]
-                    wandb_stats['optimizer/weight_abs_max'] = optimizer_states_2[3]
+                    if optimizer.state:  # optimizer stateがない場合はloggingしない
+                        # rank:0でしかoptimizer stateをloggingしないので world sizeで割る必要はない
+                        wandb_stats["optimizer/variance_l2"] = optimizer_states_1[0] ** 0.5
+                        wandb_stats["optimizer/variance_sqrt_l2"] = optimizer_states_1[1] ** 0.5
+                        wandb_stats["optimizer/momentum_l2"] = optimizer_states_1[2] ** 0.5
+                        wandb_stats["optimizer/weight_l2"] = optimizer_states_1[3] ** 0.5
+                        wandb_stats["optimizer/variance_l1"] = optimizer_states_1[4]
+                        wandb_stats["optimizer/variance_sqrt_l1"] = optimizer_states_1[5]
+                        wandb_stats["optimizer/momentum_l1"] = optimizer_states_1[6]
+                        wandb_stats["optimizer/weight_l1"] = optimizer_states_1[7]
+                        wandb_stats["optimizer/variance_abs_max"] = optimizer_states_2[0]
+                        wandb_stats["optimizer/variance_sqrt_abs_max"] = optimizer_states_2[1]
+                        wandb_stats["optimizer/momentum_abs_max"] = optimizer_states_2[2]
+                        wandb_stats["optimizer/weight_abs_max"] = optimizer_states_2[3]
 
                     # stats
                     iteration_elapsed_time = time.perf_counter() - iteration_start_time
