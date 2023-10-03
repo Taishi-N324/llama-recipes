@@ -318,12 +318,10 @@ def train(
                         flush=True,
                     )
 
-                if (
-                    wandb_iteration + 1
-                ) % train_config.save_interval_iteration == 0 and not train_config.use_peft:
+                if (wandb_iteration + 1) % train_config.save_interval_iteration == 0 and not train_config.use_peft:
+                    # 全プロセスがcheckpointを保存できるような状態になるまで待つ
                     if train_config.enable_fsdp:
                         torch_distributed.barrier()
-
                     save_checkpoint(
                         model=model,
                         optimizer=optimizer,
@@ -334,7 +332,7 @@ def train(
                         epoch=epoch,
                         iteration=wandb_iteration + 1,
                     )
-
+                    # 全プロセスがcheckpointを保存し終えるまで待つ
                     if train_config.enable_fsdp:
                         torch_distributed.barrier()
 
