@@ -148,7 +148,9 @@ def train(
             )
 
             accumulation_loss: float = 0.0
-            for step, batch in enumerate(train_dataloader, start=last_iteration * gradient_accumulation_steps):
+            # checkpointをloadした場合は、次のステップから始める
+            next_step: int = last_iteration * gradient_accumulation_steps + 1 if last_iteration != 0 else 0
+            for step, batch in enumerate(train_dataloader, start=next_step):
                 wandb_iteration: int = epoch * len(train_dataloader) + step // gradient_accumulation_steps
 
                 for key in batch.keys():
@@ -488,9 +490,7 @@ def evaluation(
     eval_loss = 0.0  # Initialize evaluation loss
 
     with MemoryTrace() as memtrace:  # noqa: F841
-        for step, batch in enumerate(
-            tqdm(eval_dataloader, colour="green", desc="evaluating Epoch")
-        ):
+        for step, batch in enumerate(tqdm(eval_dataloader, colour="green", desc="evaluating Epoch")):
             for key in batch.keys():
                 if train_config.enable_fsdp:
                     batch[key] = batch[key].to(local_rank)
@@ -504,9 +504,7 @@ def evaluation(
                 eval_loss += loss.detach().float()
             # Decode predictions and add to evaluation predictions list
             preds = torch.argmax(outputs.logits, -1)
-            eval_preds.extend(
-                tokenizer.batch_decode(preds.detach().cpu().numpy(), skip_special_tokens=True)
-            )
+            eval_preds.extend(tokenizer.batch_decode(preds.detach().cpu().numpy(), skip_special_tokens=True))
 
     # If there's more than one CUDA device, reduce evaluation loss across all devices
     if torch.cuda.device_count() > 1 and train_config.enable_fsdp:
@@ -641,9 +639,7 @@ def save_train_params(train_config, fsdp_config, rank):
     """
     # Convert the train_config and fsdp_config objects to dictionaries,
     # converting all values to strings to ensure they can be serialized into a YAML file
-    train_config_dict = {
-        k: str(v) for k, v in vars(train_config).items() if not k.startswith("__")
-    }
+    train_config_dict = {k: str(v) for k, v in vars(train_config).items() if not k.startswith("__")}
     fsdp_config_dict = {k: str(v) for k, v in vars(fsdp_config).items() if not k.startswith("__")}
     # Merge the two dictionaries into one
     train_params_dict = {**train_config_dict, **fsdp_config_dict}
