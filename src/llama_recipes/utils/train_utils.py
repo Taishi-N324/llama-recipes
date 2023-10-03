@@ -59,7 +59,9 @@ def train(
         train_dataloader: The dataloader containing the training data
         optimizer: The optimizer used for training
         lr_scheduler: The learning rate scheduler
-        gradient_accumulation_steps: The number of steps to accumulate gradients before performing a backward/update operation
+        gradient_accumulation_steps:
+            The number of steps to accumulate gradients before performing
+            a backward/update operation
         num_epochs: The number of epochs to train for
         local_rank: The rank of the current node in a distributed setting
         train_config: The training configuration
@@ -146,12 +148,8 @@ def train(
             )
 
             accumulation_loss: float = 0.0
-            for step, batch in enumerate(
-                train_dataloader, start=last_iteration * gradient_accumulation_steps
-            ):
-                wandb_iteration: int = (
-                    epoch * len(train_dataloader) + step // gradient_accumulation_steps
-                )
+            for step, batch in enumerate(train_dataloader, start=last_iteration * gradient_accumulation_steps):
+                wandb_iteration: int = epoch * len(train_dataloader) + step // gradient_accumulation_steps
 
                 for key in batch.keys():
                     if train_config.enable_fsdp:
@@ -171,9 +169,7 @@ def train(
                 if train_config.use_fp16:
                     # if fp16 is enabled, use gradient scaler to handle gradient update
                     scaler.scale(loss).backward()  # type: ignore
-                    if (step + 1) % gradient_accumulation_steps == 0 or step == len(
-                        train_dataloader
-                    ) - 1:
+                    if (step + 1) % gradient_accumulation_steps == 0 or step == len(train_dataloader) - 1:
                         scaler.step(optimizer)  # type: ignore (suppress ubound error)
                         scaler.update()  # type: ignore (suppress ubound error)
                         optimizer.zero_grad()
@@ -182,9 +178,7 @@ def train(
                 else:
                     # regular backpropagation when fp16 is not used
                     loss.backward()
-                    if (step + 1) % gradient_accumulation_steps == 0 or step == len(
-                        train_dataloader
-                    ) - 1:
+                    if (step + 1) % gradient_accumulation_steps == 0 or step == len(train_dataloader) - 1:
                         optimizer.step()
                         optimizer.zero_grad()
                         lr_scheduler.step()
@@ -195,7 +189,7 @@ def train(
                     clip_grad_norm_(model.parameters(), train_config.clip_grad_norm)
 
                 pbar.set_description(
-                    f"Training Epoch: {epoch}/{train_config.num_epochs}, step {step}/{len(train_dataloader)} completed (loss: {loss.detach().float() * gradient_accumulation_steps}, lr: {optimizer.param_groups[0]['lr']:.6f}, accumulation_step: {step % gradient_accumulation_steps + 1}/{gradient_accumulation_steps}, iteration: {wandb_iteration})"
+                    f"Training Epoch: {epoch}/{train_config.num_epochs}, step {step}/{len(train_dataloader)} completed (loss: {loss.detach().float() * gradient_accumulation_steps}, lr: {optimizer.param_groups[0]['lr']:.6f}, accumulation_step: {step % gradient_accumulation_steps + 1}/{gradient_accumulation_steps}, iteration: {wandb_iteration})"  # noqa: E501
                 )
 
                 if (
@@ -209,7 +203,7 @@ def train(
 
                     # training info
                     wandb_stats["training/loss"] = accumulation_loss
-                    wandb_stats["training/perplexity"] = torch.exp(accumulation_loss)  # type: ignore
+                    wandb_stats["training/perplexity"] = torch.exp(torch.tensor(accumulation_loss))  # type: ignore
                     accumulation_loss = 0.0
 
                     # utils info
@@ -217,9 +211,7 @@ def train(
                     sequence_length: int = batch["input_ids"].shape[1]
 
                     wandb_stats["utils/batch_size"] = batch_size
-                    wandb_stats["utils/global_batch_size"] = (
-                        batch_size * world_size * gradient_accumulation_steps
-                    )
+                    wandb_stats["utils/global_batch_size"] = batch_size * world_size * gradient_accumulation_steps
                     wandb_stats["utils/seq_len"] = sequence_length
                     wandb_stats["utils/gradient_accumulation_steps"] = gradient_accumulation_steps
                     wandb_stats["utils/epoch"] = epoch
@@ -285,29 +277,17 @@ def train(
                     iteration_start_time = time.perf_counter()
 
                     tokens_per_sec = (
-                        batch_size
-                        * sequence_length
-                        * gradient_accumulation_steps
-                        / iteration_elapsed_time
-                        * world_size
+                        batch_size * sequence_length * gradient_accumulation_steps / iteration_elapsed_time * world_size
                     )
                     wandb_stats["stats/1_iteration_time"] = iteration_elapsed_time
                     wandb_stats["stats/tokens_pef_sec"] = tokens_per_sec
-                    wandb_stats["stats/30B_tokens_day"] = (
-                        30 * (1000**3) / tokens_per_sec / 60 / 60 / 24
-                    )
-                    wandb_stats["stats/300B_tokens_day"] = (
-                        300 * (1000**3) / tokens_per_sec / 60 / 60 / 24
-                    )
-                    wandb_stats["stats/1T_tokens_day"] = (
-                        (1000**4) / tokens_per_sec / 60 / 60 / 24
-                    )
+                    wandb_stats["stats/30B_tokens_day"] = 30 * (1000**3) / tokens_per_sec / 60 / 60 / 24
+                    wandb_stats["stats/300B_tokens_day"] = 300 * (1000**3) / tokens_per_sec / 60 / 60 / 24
+                    wandb_stats["stats/1T_tokens_day"] = (1000**4) / tokens_per_sec / 60 / 60 / 24
                     wandb_stats["stats/tokens_per_sec_per_gpu"] = tokens_per_sec / world_size
 
                     checkpoint_activations_factor = 3
-                    if (
-                        fsdp_config is not None and fsdp_config.fsdp_activation_checkpointing
-                    ):  # type ignore
+                    if fsdp_config is not None and fsdp_config.fsdp_activation_checkpointing:  # type ignore
                         checkpoint_activations_factor = 4
 
                     num_layers: int = model.config.num_hidden_layers
@@ -324,9 +304,7 @@ def train(
                         * num_layers
                         * (hidden_size**2)
                     ) * (
-                        1.0
-                        + (sequence_length / (6.0 * hidden_size))
-                        + (vocab_size / (16.0 * num_layers * hidden_size))
+                        1.0 + (sequence_length / (6.0 * hidden_size)) + (vocab_size / (16.0 * num_layers * hidden_size))
                     )
                     tflops: float = flops_per_iteration / (iteration_elapsed_time * (10**12))
                     wandb_stats["stats/tflops"] = tflops
@@ -380,7 +358,7 @@ def train(
                 print(f"Peak active CUDA memory was {memtrace.peak_active_gb} GB")
                 print(f"Cuda Malloc retires : {memtrace.cuda_malloc_retires}")
                 print(
-                    f"CPU Total Peak Memory consumed during the train (max): {memtrace.cpu_peaked + memtrace.cpu_begin} GB"
+                    f"CPU Total Peak Memory consumed during the train (max): {memtrace.cpu_peaked + memtrace.cpu_begin} GB"  # noqa: E501
                 )
         else:
             print(f"Max CUDA memory allocated was {memtrace.peak} GB")
@@ -443,16 +421,14 @@ def train(
         if train_config.enable_fsdp:
             if rank == 0:
                 print(
-                    f"Epoch {epoch+1}: train_perplexity={train_perplexity:.4f}, train_epoch_loss={train_epoch_loss:.4f}, epoch time {epoch_end_time}s"
+                    f"Epoch {epoch+1}: train_perplexity={train_perplexity:.4f}, train_epoch_loss={train_epoch_loss:.4f}, epoch time {epoch_end_time}s"  # noqa: E501
                 )
         else:
             print(
-                f"Epoch {epoch+1}: train_perplexity={train_perplexity:.4f}, train_epoch_loss={train_epoch_loss:.4f}, epoch time {epoch_end_time}s"
+                f"Epoch {epoch+1}: train_perplexity={train_perplexity:.4f}, train_epoch_loss={train_epoch_loss:.4f}, epoch time {epoch_end_time}s"  # noqa: E501
             )
     avg_epoch_time = sum(epoch_times) / len(epoch_times)
-    avg_checkpoint_time = (
-        sum(checkpoint_times) / len(checkpoint_times) if len(checkpoint_times) > 0 else 0
-    )
+    avg_checkpoint_time = sum(checkpoint_times) / len(checkpoint_times) if len(checkpoint_times) > 0 else 0
     avg_train_prep = sum(train_prep) / len(train_prep)
     avg_train_loss = sum(train_loss) / len(train_loss)
     if train_config.run_validation:
