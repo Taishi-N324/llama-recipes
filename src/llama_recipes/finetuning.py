@@ -272,6 +272,7 @@ def main(**kwargs) -> None:
             momentum_dtype=torch.bfloat16,
             variance_dtype=torch.bfloat16,
             use_kahan_summation=False,
+            weight_decay=train_config.weight_decay
         )
     else:
         optimizer = optim.AdamW(
