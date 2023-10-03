@@ -3,8 +3,10 @@
 
 import os
 import logging
+import random
 
 import fire
+import numpy as np
 import torch
 import torch.distributed as torch_distributed
 from torch.distributed.fsdp.fully_sharded_data_parallel import CPUOffload  # type: ignore
