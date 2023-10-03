@@ -66,7 +66,12 @@ def load_model_sharded(
             print("No sharded_state_dict checkpoint directory found...skipping")
         return 0, 0, 0
 
-    last_iteration: int = read_latest_value(f"{load_dir}/latest")
+    try:
+        last_iteration: int = read_latest_value(f"{load_dir}/latest")
+    except FileNotFoundError or ValueError:
+        if rank == 0:
+            print("No sharded_state_dict checkpoint directory found...skipping")
+        return 0, 0, 0
 
     if rank == 0:
         print(f"loading model from model path: {load_dir}, iteration: {last_iteration}")
@@ -103,7 +108,12 @@ def load_model_sharded(
     epoch: int = 0
     iteration: int = last_iteration
     consumed_tokens: int = 0
-    print_rank_0(f"epoch: {epoch}, iteration: {iteration}")
+
+    # schedulerの状態を復元する
+    for _ in range(iteration):
+        scheduler.step()
+
+    print_rank_0(f"epoch: {epoch}, iteration: {iteration} is loaded")
 
     return epoch, iteration, consumed_tokens
 
