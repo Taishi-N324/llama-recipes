@@ -16,7 +16,7 @@ from llama_recipes.datasets import (
 
 from llama_recipes.configs.datasets import ja_wikipedia_dataset
 from llama_recipes.datasets.utils import Concatenator
-from llama_recipes.utils.distributed import print_rank_0, is_rank_0
+from llama_recipes.utils.distributed import print_rank_0, is_rank_0  # noqa: F401
 
 from torch.utils.data import Dataset
 
@@ -75,11 +75,11 @@ def get_ja_wikipedia_dataset(dataset_config: Type[ja_wikipedia_dataset], tokeniz
     )
     print_rank_0(f"raw_dataset: {raw_dataset}")
 
-    if is_rank_0():
-        example: str = raw_dataset["train"][0]["text"]
-        tokens = tokenizer.tokenize(example)
-        de_tokenized_text: str = tokenizer.decode(tokenizer.convert_tokens_to_ids(tokens))
-        print(f"raw dataset[0]: {example}, tokens: {tokens}, de-tokenized: {de_tokenized_text}")
+    # if is_rank_0():
+    #     example: str = raw_dataset["train"][0]["text"]
+    #     tokens = tokenizer.tokenize(example)
+    #     de_tokenized_text: str = tokenizer.decode(tokenizer.convert_tokens_to_ids(tokens))
+    #     print(f"raw dataset[0]: {example}, tokens: {tokens}, de-tokenized: {de_tokenized_text}")
 
     dataset = raw_dataset["train"].map(
         lambda sample: tokenizer(sample["text"]),
