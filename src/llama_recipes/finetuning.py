@@ -246,6 +246,12 @@ def main(**kwargs) -> None:
             )
 
     # Create DataLoaders for the training and validation dataset
+    # NOTE: we need to set worker_init_fn to set seed for each worker
+    def worker_init_fn(worker_id: int) -> None:
+        worker_seed = train_config.seed + worker_id
+        np.random.seed(worker_seed)
+        random.seed(worker_seed)
+
     train_dataloader: DataLoader = DataLoader(
         dataset_train,
         batch_size=train_config.batch_size_training,
@@ -254,6 +260,7 @@ def main(**kwargs) -> None:
         sampler=train_sampler if train_sampler else None,
         drop_last=True,
         collate_fn=default_data_collator,
+        worker_init_fn=worker_init_fn,
     )
 
     eval_dataloader: typing.Optional[DataLoader] = None
