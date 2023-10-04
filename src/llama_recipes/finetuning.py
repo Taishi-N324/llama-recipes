@@ -237,7 +237,6 @@ def main(**kwargs) -> None:
         * len(dataset_train)  # type: ignore
         // (train_config.batch_size_training * world_size * train_config.gradient_accumulation_steps)
     )
-    seq_len_warmup_iterations: int = int(estimated_total_iterations * train_config.lr_warmup * 2)
     lr_warmup_iterations: int = int(estimated_total_iterations * train_config.lr_warmup)
     lr_decay_iterations: int = int(estimated_total_iterations * train_config.lr_decay)
 
@@ -248,13 +247,13 @@ def main(**kwargs) -> None:
     train_sampler = None
     val_sampler = None
     if train_config.enable_fsdp:
-        train_sampler = DistributedSampler(
+        train_sampler = CustomDistributedSampler(
             dataset_train,
             rank=torch_distributed.get_rank(),
             num_replicas=torch_distributed.get_world_size(),
             shuffle=True,
-                seed=train_config.seed,
-            )
+            seed=train_config.seed,
+        )
         if train_config.run_validation:
             val_sampler = DistributedSampler(
                 dataset_val,
