@@ -205,9 +205,7 @@ def train(
 
                     # training info
                     wandb_stats["training/loss"] = accumulation_loss
-                    wandb_stats["training/perplexity"] = torch.exp(
-                        torch.tensor(accumulation_loss).detach()
-                    )
+                    wandb_stats["training/perplexity"] = torch.exp(torch.tensor(accumulation_loss).clone().detach())
                     accumulation_loss = 0.0
 
                     # utils info
