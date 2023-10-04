@@ -253,12 +253,14 @@ def main(**kwargs) -> None:
             rank=torch_distributed.get_rank(),
             num_replicas=torch_distributed.get_world_size(),
             shuffle=True,
-        )
+                seed=train_config.seed,
+            )
         if train_config.run_validation:
             val_sampler = DistributedSampler(
                 dataset_val,
                 rank=torch_distributed.get_rank(),
                 num_replicas=torch_distributed.get_world_size(),
+                seed=train_config.seed,
             )
 
     # Create DataLoaders for the training and validation dataset
@@ -269,7 +271,7 @@ def main(**kwargs) -> None:
         random.seed(worker_seed)
 
     train_dataloader: DataLoader = DataLoader(
-        dataset_train,
+        dataset=dataset_train,
         batch_size=train_config.batch_size_training,
         num_workers=train_config.num_workers_dataloader,
         pin_memory=True,
@@ -299,7 +301,7 @@ def main(**kwargs) -> None:
             momentum_dtype=torch.bfloat16,
             variance_dtype=torch.bfloat16,
             use_kahan_summation=False,
-            weight_decay=train_config.weight_decay
+            weight_decay=train_config.weight_decay,
         )
     else:
         optimizer = optim.AdamW(
