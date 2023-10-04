@@ -1,6 +1,6 @@
 #!/bin/bash
 #$ -l rt_AF=2
-#$ -l h_rt=4:00:00
+#$ -l h_rt=24:00:00
 #$ -j y
 #$ -o outputs/13b/
 #$ -cwd
@@ -40,24 +40,22 @@ NUM_GPUS=$((${NUM_NODES} * ${NUM_GPU_PER_NODE}))
 mkdir -p ./hostfile
 
 HOSTFILE_NAME=./hostfile/hostfile_${JOB_ID}
-while read -r line
-do
+while read -r line; do
   echo "${line} slots=${NUM_GPU_PER_NODE}"
-done < "$SGE_JOB_HOSTLIST" > "$HOSTFILE_NAME"
-
+done <"$SGE_JOB_HOSTLIST" >"$HOSTFILE_NAME"
 
 # debugging flag
-# export LOGLEVEL=INFO
-# export NCCL_DEBUG=WARN
-# export NCCL_DEBUG_SUBSYS=WARN
-# export PYTHONFAULTHANDLER=1
-# export CUDA_LAUNCH_BLOCKING=0
+export LOGLEVEL=INFO
+export NCCL_DEBUG=WARN
+export NCCL_DEBUG_SUBSYS=WARN
+export PYTHONFAULTHANDLER=1
+export CUDA_LAUNCH_BLOCKING=0
 
 # training settings
 NUM_EPOCHS=1
 
 # batch size
-BATCH_SIZE=1
+BATCH_SIZE=4
 GLOBAL_BATCH_SIZE=1024
 GRADIENT_ACCUMULATION_STEPS=$((GLOBAL_BATCH_SIZE / (BATCH_SIZE * NUM_GPUS)))
 
@@ -81,14 +79,11 @@ SEED=42
 NUM_WORKERS_DATALOADER=2
 
 # checkpoint path
-CHECKPOINTS_PATH=/groups/gaf51217/fujii/checkpoints/llama-2-13b/llama-recipies
+CHECKPOINTS_PATH=/bb/llm/gaf51275/checkpoints/llama/llama-2-13b
 mkdir -p $CHECKPOINTS_PATH
 
 # hugginface setting
-export HF_HOME=/scratch/$(whoami)/.cache/huggingface/
-
-# checkpoint path
-CHECKPOINTS_PATH=/groups/gaf51217/fujii/checkpoints/llama-recipes/llama-2-13b-gbs_${GLOBAL_BATCH_SIZE}_${NODE_TYPE}_${NHOSTS}
+export HF_HOME=/bb/llm/gaf51275/.cache/huggingface
 
 # run
 mpirun -np $NUM_GPUS \
@@ -105,7 +100,8 @@ mpirun -np $NUM_GPUS \
   --mixed_precision \
   --pure_bf16 \
   --num_epochs $NUM_EPOCHS \
-  --model_name /groups/gaf51217/fujii/finetune/llama2/Llama-2-13b-hf \
+  --model_name /bb/llm/gaf51275/jalm/Llama-2-13b-chat-merged-tokenizer-hf \
+  --tokenizer_name /bb/llm/gaf51275/jalm/jalm-tokenizer-private/tokenizer/jalm_llama_clueweb/merged_tokenizer_hf \
   --batch_size_training $BATCH_SIZE \
   --gradient_accumulation_steps $GRADIENT_ACCUMULATION_STEPS \
   --lr $LR \
@@ -116,12 +112,13 @@ mpirun -np $NUM_GPUS \
   --weight_decay $WEIGHT_DECAY \
   --fsdp_activation_checkpointing \
   --seed $SEED \
-  --dataset "ja_wikipedia_dataset" \
+  --dataset "llm_jp_dataset" \
   --num_workers_dataloader $NUM_WORKERS_DATALOADER \
   --save_model \
   --save_optimizer \
-  --save_interval_iteration 20 \
+  --save_interval_iteration 100 \
   --save_checkpoint_path $CHECKPOINTS_PATH \
+  --load_checkpoint_path $CHECKPOINTS_PATH \
   --use_mpi \
   --use_fast_kernels \
   --wandb_name "llama2-13b_${NODE_TYPE}_${NHOSTS}_FSDP_${NUM_GPUS}_GLOBAL_BATCH_SIZE_${GLOBAL_BATCH_SIZE}"
