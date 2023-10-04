@@ -129,6 +129,22 @@ def train(
             rank=rank if rank is not None else 0,
             cfg=train_config,
         )
+        # sampler state load
+        load_dir: str = train_config.load_checkpoint_path
+
+        if not Path(load_dir).exists():
+            if rank == 0:
+                print("No checkpoint directory found...skipping")
+        else:
+            from llama_recipes.model_checkpointing.checkpoint_handler import read_latest_value
+
+            try:
+                last_iteration: int = read_latest_value(f"{load_dir}/latest")
+                sampler_checkpoint_path: str = load_dir + "/iter_{:07d}/sampler_checkpoint.pt".format(last_iteration)
+                sampler.load_state_dict(torch.load(sampler_checkpoint_path))  # type: ignore
+            except FileNotFoundError or ValueError:
+                if rank == 0:
+                    print("No latest iteration file found")
 
         if train_config.enable_fsdp:
             torch_distributed.barrier()
@@ -348,6 +364,13 @@ def train(
                     # 全プロセスがcheckpointを保存し終えるまで待つ
                     if train_config.enable_fsdp:
                         torch_distributed.barrier()
+                    if rank == 0:
+                        # sampler state save
+                        load_dir: str = train_config.load_checkpoint_path
+                        sampler_checkpoint_path: str = load_dir + "/iter_{:07d}/sampler_checkpoint.pt".format(
+                            last_iteration
+                        )
+                        torch.save(sampler.state_dict(), sampler_checkpoint_path)  # type: ignore
 
         epoch_end_time = time.perf_counter() - epoch_start_time
         epoch_times.append(epoch_end_time)
