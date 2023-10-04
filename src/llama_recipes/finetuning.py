@@ -198,9 +198,7 @@ def main(**kwargs) -> None:
             device_id=torch.cuda.current_device(),
             limit_all_gathers=True,
             sync_module_states=train_config.low_cpu_fsdp,
-            param_init_fn=lambda module: module.to_empty(  # type: ignore
-                device=torch.device("cuda"), recurse=False
-            )
+            param_init_fn=lambda module: module.to_empty(device=torch.device("cuda"), recurse=False)  # type: ignore
             if train_config.low_cpu_fsdp and rank != 0
             else None,
         )
@@ -228,6 +226,24 @@ def main(**kwargs) -> None:
     )
     if not train_config.enable_fsdp or rank == 0:
         print(f"--> Validation Set Length = {len(dataset_val)}")  # type: ignore
+
+    """
+    estimated_total_iterations: 学習にかかる iteration数
+    lr_warmup_iterations: learning rateがwarmupしきるのにかかるiterations
+    lr_decay_iterations: learning rate が cosineで落ちきるのにかかるiterations
+    """
+    estimated_total_iterations: int = (
+        train_config.num_epochs
+        * len(dataset_train)  # type: ignore
+        // (train_config.batch_size_training * world_size * train_config.gradient_accumulation_steps)
+    )
+    seq_len_warmup_iterations: int = int(estimated_total_iterations * train_config.lr_warmup * 2)
+    lr_warmup_iterations: int = int(estimated_total_iterations * train_config.lr_warmup)
+    lr_decay_iterations: int = int(estimated_total_iterations * train_config.lr_decay)
+
+    dataset_length: int = len(dataset_train)  # type: ignore
+    if rank == 0:
+        print(f"dataset_train: {dataset_length}")  # type: ignore
 
     train_sampler = None
     val_sampler = None
@@ -292,16 +308,12 @@ def main(**kwargs) -> None:
             weight_decay=train_config.weight_decay,
         )
 
-    """
-    estimated_total_iterations: 学習にかかる iteration数
-    lr_warmup_iterations: learning rateがwarmupしきるのにかかるiterations
-    lr_decay_iterations: learning rate が cosineで落ちきるのにかかるiterations
-    """
-    estimated_total_iterations: int = (
+    print_rank_0(
+        f"Estimated total iterations ({estimated_total_iterations}) vs. {train_config.num_epochs * len(train_dataloader) // train_config.gradient_accumulation_steps}"
+    )
+    assert estimated_total_iterations == (
         train_config.num_epochs * len(train_dataloader) // train_config.gradient_accumulation_steps
     )
-    lr_warmup_iterations: int = int(estimated_total_iterations * train_config.lr_warmup)
-    lr_decay_iterations: int = int(estimated_total_iterations * train_config.lr_decay)
 
     # wandb config update
     if train_config.wandb_name is not None and rank == 0:
@@ -327,17 +339,18 @@ def main(**kwargs) -> None:
 
     # Start the training process
     results = train(
-        model,
-        train_dataloader,
-        eval_dataloader,
-        tokenizer,
-        optimizer,
-        scheduler,
-        train_config.gradient_accumulation_steps,
-        train_config,
-        fsdp_config if train_config.enable_fsdp else None,
-        local_rank if train_config.enable_fsdp else None,
-        rank if train_config.enable_fsdp else None,
+        model=model,
+        train_dataloader=train_dataloader,
+        eval_dataloader=eval_dataloader,
+        sampler=train_sampler,  # type: ignore
+        tokenizer=tokenizer,
+        optimizer=optimizer,
+        lr_scheduler=scheduler,
+        gradient_accumulation_steps=train_config.gradient_accumulation_steps,
+        train_config=train_config,
+        fsdp_config=fsdp_config if train_config.enable_fsdp else None,
+        local_rank=local_rank if train_config.enable_fsdp else None,
+        rank=rank if train_config.enable_fsdp else None,
     )
     if not train_config.enable_fsdp or rank == 0:
         [print(f"Key: {k}, Value: {v}") for k, v in results.items()]
