@@ -1,6 +1,6 @@
 #!/bin/bash
 #$ -l rt_AF=2
-#$ -l h_rt=4:00:00
+#$ -l h_rt=3:00:00
 #$ -j y
 #$ -o outputs/7b/
 #$ -cwd
@@ -47,11 +47,11 @@ done < "$SGE_JOB_HOSTLIST" > "$HOSTFILE_NAME"
 
 
 # debugging flag
-# export LOGLEVEL=INFO
-# export NCCL_DEBUG=WARN
-# export NCCL_DEBUG_SUBSYS=WARN
-# export PYTHONFAULTHANDLER=1
-# export CUDA_LAUNCH_BLOCKING=0
+export LOGLEVEL=INFO
+export NCCL_DEBUG=WARN
+export NCCL_DEBUG_SUBSYS=WARN
+export PYTHONFAULTHANDLER=1
+export CUDA_LAUNCH_BLOCKING=0
 
 # training settings
 NUM_EPOCHS=1
@@ -88,7 +88,7 @@ mkdir -p $CHECKPOINTS_PATH
 export HF_HOME=/scratch/$(whoami)/.cache/huggingface/
 
 # checkpoint path
-CHECKPOINTS_PATH=/groups/gaf51217/fujii/checkpoints/llama-recipes/llama-2-7b-gbs_${GLOBAL_BATCH_SIZE}_${NODE_TYPE}_${NHOSTS}
+CHECKPOINTS_PATH=/groups/gaf51217/fujii/checkpoints/llama-recipes/llama-2-7b-gbs_${GLOBAL_BATCH_SIZE}
 mkdir -p $CHECKPOINTS_PATH
 
 # run
@@ -121,8 +121,9 @@ mpirun -np $NUM_GPUS \
   --num_workers_dataloader $NUM_WORKERS_DATALOADER \
   --save_model \
   --save_optimizer \
-  --save_interval_iteration 5 \
+  --save_interval_iteration 10 \
   --save_checkpoint_path $CHECKPOINTS_PATH \
+  --load_checkpoint_path $CHECKPOINTS_PATH \
   --use_mpi \
   --use_fast_kernels \
   --wandb_name "llama2-7b_${NODE_TYPE}_${NHOSTS}_FSDP_${NUM_GPUS}_GLOBAL_BATCH_SIZE_${GLOBAL_BATCH_SIZE}"
