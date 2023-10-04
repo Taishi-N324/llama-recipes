@@ -96,8 +96,8 @@ def main(**kwargs) -> None:
         now = datetime.datetime.now()
         now = now.strftime("%Y-%m-%d-%H-%M-%S")
         wandb_setting: dict = {
-            "entity": "gpt-fugaku",
-            "project": "llama-2-finetuning",
+            "entity": "prj-jalm",
+            "project": "llama-2-continual",
             "name": train_config.wandb_name,
             "config": wandb_configs,
         }
