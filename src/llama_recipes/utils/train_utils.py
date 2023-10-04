@@ -12,6 +12,7 @@ import torch
 import torch.cuda.nccl as nccl
 from torch import distributed as torch_distributed  # noqa: F401
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 from torch.distributed.fsdp.sharded_grad_scaler import ShardedGradScaler
 from torch.nn.utils import clip_grad_norm_  # type: ignore
 from tqdm import tqdm
@@ -26,6 +27,8 @@ from llama_recipes.utils.memory_utils import MemoryTrace
 
 from typing import Optional, Type, Any
 import wandb
+
+from llama_recipes.utils.sequence_length_warmup import SequenceLengthWarmupDistributedSampler
 
 
 def set_tokenizer_params(tokenizer: LlamaTokenizer):
@@ -42,6 +45,7 @@ def train(
     model,
     train_dataloader: DataLoader,
     eval_dataloader: Optional[DataLoader],
+    sampler: SequenceLengthWarmupDistributedSampler | DistributedSampler,
     tokenizer,
     optimizer: torch.optim.AdamW | AnyPrecisionAdamW,
     lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
@@ -149,6 +153,7 @@ def train(
         if train_config.enable_fsdp:
             torch_distributed.barrier()
 
+    wandb_iteration: int = 0
     for epoch in range(last_epoch, train_config.num_epochs):
         epoch_start_time = time.perf_counter()
         iteration_start_time = time.perf_counter()
@@ -165,9 +170,13 @@ def train(
 
             accumulation_loss: float = 0.0
             # checkpointをloadした場合は、次のステップから始める
-            next_step: int = last_iteration * gradient_accumulation_steps + 1 if last_iteration != 0 else 0
+            next_step: int = last_iteration * gradient_accumulation_steps if last_iteration != 0 else 0
             for step, batch in enumerate(train_dataloader, start=next_step):
-                wandb_iteration: int = epoch * len(train_dataloader) + step // gradient_accumulation_steps
+                wandb_iteration = epoch * len(train_dataloader) + step // gradient_accumulation_steps
+                if train_config.use_sequence_length_schedule:
+                    # sequence length warmup
+                    current_seq_len: int = min(4096, max(64, 64 + 4 * wandb_iteration))
+                    batch = {key: value[:, :current_seq_len] for key, value in batch.items()}
 
                 for key in batch.keys():
                     if train_config.enable_fsdp:
