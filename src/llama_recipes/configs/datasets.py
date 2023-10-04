@@ -43,3 +43,11 @@ class ja_wikipedia_dataset:
     context_size: int = 4096  # sequence length
     train_split: str = "train"
     test_split: str = "test"
+
+
+@dataclass
+class llm_jp_dataset:
+    dataset: str = "llm_jp_dataset"
+    context_size: int = 4096  # sequence length
+    train_split: str = "train"
+    test_split: str = "test"
