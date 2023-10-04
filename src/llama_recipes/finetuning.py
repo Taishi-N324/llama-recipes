@@ -48,6 +48,11 @@ from llama_recipes.utils.train_utils import (
     train,
 )
 from llama_recipes.optimizer import WarmupCosineAnnealingLR
+from llama_recipes.utils.sequence_length_warmup import (  # noqa: F401
+    SequenceLengthWarmupDistributedSampler,  # noqa: F401
+    SequenceLengthWarmupDataset,  # noqa: F401
+    CustomDistributedSampler,
+)
 
 
 def main(**kwargs) -> None:
@@ -62,6 +67,8 @@ def main(**kwargs) -> None:
     np.random.seed(train_config.seed)
     torch.cuda.manual_seed(train_config.seed)
     torch.manual_seed(train_config.seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
     # possibly unbound error を解決するために
     rank: int = 0
