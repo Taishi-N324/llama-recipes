@@ -168,7 +168,7 @@ def main(**kwargs) -> None:
         model.to(torch.bfloat16)  # type: ignore
 
     # Load the tokenizer and add special tokens
-    tokenizer = LlamaTokenizer.from_pretrained(train_config.model_name)
+    tokenizer = LlamaTokenizer.from_pretrained(train_config.tokenizer_name)
     tokenizer.add_special_tokens(
         {
             "pad_token": "<PAD>",
