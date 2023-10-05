@@ -304,6 +304,8 @@ def main(**kwargs) -> None:
         optimizer = AnyPrecisionAdamW(
             model.parameters(),  # type: ignore
             lr=train_config.lr,
+            betas=train_config.adamw_betas,
+            eps=train_config.adamw_eps,
             momentum_dtype=torch.bfloat16,
             variance_dtype=torch.bfloat16,
             use_kahan_summation=False,
@@ -313,6 +315,8 @@ def main(**kwargs) -> None:
         optimizer = optim.AdamW(
             model.parameters(),  # type: ignore
             lr=train_config.lr,
+            betas=train_config.adamw_betas,
+            eps=train_config.adamw_eps,
             weight_decay=train_config.weight_decay,
         )
 

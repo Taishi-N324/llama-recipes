@@ -28,6 +28,8 @@ class train_config:
     sequence_length_warmup: float = 0.15
     weight_decay: float = 0.1
     gamma: float = 0.85
+    adamw_eps: float = 1e-5
+    adamw_betas: tuple[float, float] = (0.9, 0.95)
     seed: int = 42
     use_fp16: bool = False
     mixed_precision: bool = True

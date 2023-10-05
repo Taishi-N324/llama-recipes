@@ -19,6 +19,8 @@ def set_config(wandb_configs: dict) -> None:
     wandb_configs["use_sequence_length_schedule"] = train_config.use_sequence_length_schedule
     wandb_configs["weight_decay"] = train_config.weight_decay
     wandb_configs["gamma"] = train_config.gamma
+    wandb_configs["adamw_eps"] = train_config.adamw_eps
+    wandb_configs["adamw_betas"] = train_config.adamw_betas
     wandb_configs["seed"] = train_config.seed
     wandb_configs["use_fp16"] = train_config.use_fp16
     wandb_configs["mixed_precision"] = train_config.mixed_precision

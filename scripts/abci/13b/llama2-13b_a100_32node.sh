@@ -1,6 +1,6 @@
 #!/bin/bash
 #$ -l rt_AF=32
-#$ -l h_rt=24:00:00
+#$ -l h_rt=13:00:00:00
 #$ -j y
 #$ -o outputs/13b/
 #$ -cwd
@@ -65,12 +65,16 @@ if (($GRADIENT_ACCUMULATION_STEPS < 1)); then
 fi
 
 # optimizer
-LR=1e-4
+LR=3e-5
 LR_MIN=1e-5
 LR_DECAY=0.80
 LR_WARMUP=0.05
 LR_DECAY_STYLE="cosine"
 WEIGHT_DECAY=0.1
+
+EPS=1e-5
+BETA_1=0.9
+BETA_2=0.95
 
 # seed
 SEED=42
@@ -105,6 +109,8 @@ mpirun -np $NUM_GPUS \
   --batch_size_training $BATCH_SIZE \
   --gradient_accumulation_steps $GRADIENT_ACCUMULATION_STEPS \
   --lr $LR \
+  --adamw_eps $EPS \
+  --adamw_betas $BETA_1 $BETA_2 \
   --lr_min $LR_MIN \
   --lr_warmup $LR_WARMUP \
   --lr_decay $LR_DECAY \
