@@ -1,6 +1,6 @@
 #!/bin/bash
-#$ -l rt_AF=8
-#$ -l h_rt=00:10:00
+#$ -l rt_AF=60
+#$ -l h_rt=00:30:00
 #$ -j y
 #$ -o outputs/node_check/
 #$ -cwd
@@ -13,7 +13,7 @@ module load nccl/2.16/2.16.2-1
 module load hpcx/2.12
 
 # project
-PROJECT_DIR=/home/acf15649kv/work/finetune/llama-recipes
+PROJECT_DIR=/bb/llm/gaf51275/llama/llama-recipes
 cd ${PROJECT_DIR}
 source .env/bin/activate
 

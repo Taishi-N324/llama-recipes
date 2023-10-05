@@ -1,5 +1,5 @@
 #!/bin/bash
-#$ -l rt_F=1
+#$ -l rt_AF=1
 #$ -l h_rt=4:00:00
 #$ -j y
 #$ -o outputs/
@@ -15,7 +15,7 @@ module load nccl/2.16/2.16.2-1
 module load hpcx/2.12
 
 # swich virtual env
-cd /home/acf15649kv/work/finetune/llama-recipes
+cd /bb/llm/gaf51275/llama/llama-recipes
 source .env/bin/activate
 
 # pip version up
