@@ -1,5 +1,5 @@
 #!/bin/bash
-#$ -l rt_AF=2
+#$ -l rt_AF=32
 #$ -l h_rt=24:00:00
 #$ -j y
 #$ -o outputs/13b/
@@ -79,7 +79,7 @@ SEED=42
 NUM_WORKERS_DATALOADER=2
 
 # checkpoint path
-CHECKPOINTS_PATH=/bb/llm/gaf51275/checkpoints/llama/llama-2-13b
+CHECKPOINTS_PATH=/bb/llm/gaf51275/llama/checkpoints/llama-2-13b-gbs_${GLOBAL_BATCH_SIZE}-${NODE_TYPE}_${NHOSTS}
 mkdir -p $CHECKPOINTS_PATH
 
 # hugginface setting

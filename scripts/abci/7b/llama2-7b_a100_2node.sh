@@ -81,11 +81,11 @@ SEED=42
 NUM_WORKERS_DATALOADER=2
 
 # checkpoint path
-CHECKPOINTS_PATH=/groups/gaf51217/fujii/checkpoints/llama-2-7b/llama-recipies
+CHECKPOINTS_PATH=/bb/llm/gaf51275/llama/checkpoints/llama-2-7b-gbs_${GLOBAL_BATCH_SIZE}-${NODE_TYPE}_${NHOSTS}
 mkdir -p $CHECKPOINTS_PATH
 
 # hugginface setting
-export HF_HOME=/scratch/$(whoami)/.cache/huggingface/
+export HF_HOME=/bb/llm/gaf51275/.cache/huggingface
 
 # checkpoint path
 CHECKPOINTS_PATH=/groups/gaf51217/fujii/checkpoints/llama-recipes/llama-2-7b-gbs_${GLOBAL_BATCH_SIZE}
