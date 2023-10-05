@@ -39,7 +39,6 @@ class custom_dataset:
 @dataclass
 class ja_wikipedia_dataset:
     dataset: str = "ja_wiki_dataset"
-    path: str = "/groups/gaf51217/fujii/datasets/llama_recipes/ja_wiki/ja_merged.json"
     context_size: int = 4096  # sequence length
     train_split: str = "train"
     test_split: str = "test"
