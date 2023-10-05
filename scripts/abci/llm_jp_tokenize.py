@@ -61,6 +61,7 @@ def get_llm_jp_dataset(tokenizer, split: str = "train", index: int = 0):
         train_path: str = (
             f"/bb/llm/gaf51275/llama/datasets/llama2-llm-jp-corpus/v1.0.2/sample/ja_cc/merged_train_{index}.jsonl"
         )
+
         dataset_paths: list[str] = [train_path]
         print(f"processing {train_path}")
 
@@ -116,7 +117,8 @@ def main() -> None:
         }
     )
 
-    get_llm_jp_dataset(tokenizer, split="train", index=args[1])  # type: ignore
+    tokenized_dataset = get_llm_jp_dataset(tokenizer, split="train", index=args[1])  # type: ignore
+    tokenized_dataset.save_to_disk(f"/bb/llm/gaf51275/llama/tokenized/tokenized_ja_cc_{0}.arrow")
 
 
 if __name__ == "__main__":

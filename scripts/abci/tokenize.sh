@@ -22,6 +22,6 @@ export HF_HOME=/bb/llm/gaf51275/.cache/huggingface
 cd scripts/abci
 # tokenize
 
-for ((i=0; i<=37; i++)); do
+for ((i=1; i<=1; i++)); do
   python llm_jp_tokenize.py $i
 done
