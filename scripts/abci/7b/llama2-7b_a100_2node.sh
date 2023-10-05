@@ -107,6 +107,7 @@ mpirun -np $NUM_GPUS \
   --pure_bf16 \
   --num_epochs $NUM_EPOCHS \
   --model_name /groups/gaf51217/fujii/finetune/llama2/Llama-2-7b-hf \
+  --tokenizer_name /groups/gaf51217/fujii/finetune/llama2/Llama-2-7b-hf \
   --batch_size_training $BATCH_SIZE \
   --gradient_accumulation_steps $GRADIENT_ACCUMULATION_STEPS \
   --lr $LR \
@@ -126,4 +127,5 @@ mpirun -np $NUM_GPUS \
   --load_checkpoint_path $CHECKPOINTS_PATH \
   --use_mpi \
   --use_fast_kernels \
+  --use_sequence_length_schedule \
   --wandb_name "llama2-7b_${NODE_TYPE}_${NHOSTS}_FSDP_${NUM_GPUS}_GLOBAL_BATCH_SIZE_${GLOBAL_BATCH_SIZE}"
