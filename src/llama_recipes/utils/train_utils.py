@@ -22,7 +22,7 @@ from llama_recipes.configs.training import train_config
 
 from llama_recipes.model_checkpointing import save_checkpoint
 from llama_recipes.model_checkpointing.checkpoint_handler import load_model_sharded
-from llama_recipes.policies import fpSixteen, bfSixteen_mixed, get_llama_wrapper, AnyPrecisionAdamW
+from llama_recipes.policies import fpSixteen, bfSixteen_mixed, get_llama_wrapper
 from llama_recipes.utils.memory_utils import MemoryTrace
 
 from typing import Optional, Type, Any
@@ -47,7 +47,7 @@ def train(
     eval_dataloader: Optional[DataLoader],
     sampler: SequenceLengthWarmupDistributedSampler | DistributedSampler,
     tokenizer,
-    optimizer: torch.optim.AdamW | AnyPrecisionAdamW,
+    optimizer: torch.optim.AdamW,
     lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
     gradient_accumulation_steps: int,
     train_config: Type[train_config],
