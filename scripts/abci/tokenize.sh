@@ -13,11 +13,15 @@ module load nccl/2.16/2.16.2-1
 module load hpcx/2.12
 
 # swich virtual env
-cd /bb/llm/gaf51275/llama/llama-recipes
+cd /bb/llm/gaf51275/llama/llama-recipes/
 source .env/bin/activate
 
-# hugginface setting
+# hugginface setting cache
 export HF_HOME=/bb/llm/gaf51275/.cache/huggingface
 
-cd scripts/abci/
-python llm_jp_tokenize.py
+cd scripts/abci
+# tokenize
+
+for ((i=36; i<37; i++)); do
+  python llm_jp_tokenize.py $i
+done

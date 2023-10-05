@@ -1,5 +1,6 @@
 from typing import List
 import datasets
+import sys
 
 from transformers import LlamaTokenizer
 from tqdm.contrib.concurrent import process_map
@@ -55,17 +56,18 @@ def load_dataset(split: str, tokenizer, return_dict, paths: List[str]) -> None:
     return_dict[split] = dataset[split]
 
 
-def get_llm_jp_dataset(tokenizer, split: str = "test"):
+def get_llm_jp_dataset(tokenizer, split: str = "train", index: int = 0):
     if split == "train":
-        print("dataset_paths call")
-        train_path = "/bb/llm/gaf51275/llama/datasets/llama2-llm-jp-corpus/v1.0.2/sample/ja_cc/merged_train_37.jsonl"
-        print("train_path call")
+        train_path: str = (
+            f"/bb/llm/gaf51275/llama/datasets/llama2-llm-jp-corpus/v1.0.2/sample/ja_cc/merged_train_{index}.jsonl"
+        )
         dataset_paths: list[str] = [train_path]
+        print(f"processing {train_path}")
 
         raw_dataset: datasets.DatasetDict = datasets.load_dataset(  # type: ignore
             path="json",
             data_files=dataset_paths,
-            num_proc=2,
+            num_proc=64,
         )
         dataset = (
             raw_dataset["train"]
@@ -73,8 +75,9 @@ def get_llm_jp_dataset(tokenizer, split: str = "test"):
                 lambda sample: tokenizer(sample["text"]),
                 batched=True,
                 remove_columns=list(raw_dataset["train"].features),
+                num_proc=64,
             )
-            .map(Concatenator(chunk_size=4096), batched=True)
+            .map(Concatenator(chunk_size=4096), batched=True, num_proc=64)
         )
         return dataset
     else:
@@ -85,7 +88,7 @@ def get_llm_jp_dataset(tokenizer, split: str = "test"):
         raw_dataset: datasets.DatasetDict = datasets.load_dataset(  # type: ignore
             path="json",
             data_files=dataset_paths,
-            num_proc=2,
+            num_proc=64,
         )
         dataset = (
             raw_dataset["train"]
@@ -93,21 +96,28 @@ def get_llm_jp_dataset(tokenizer, split: str = "test"):
                 lambda sample: tokenizer(sample["text"]),
                 batched=True,
                 remove_columns=list(raw_dataset["train"].features),
+                num_proc=64,
             )
-            .map(Concatenator(chunk_size=4096), batched=True)
+            .map(Concatenator(chunk_size=4096), batched=True, num_proc=64)
         )
         return dataset
 
 
-tokenizer = LlamaTokenizer.from_pretrained(
-    "/bb/llm/gaf51275/jalm/jalm-tokenizer-private/tokenizer/jalm_llama_clueweb/merged_tokenizer_hf"
-)
-tokenizer.add_special_tokens(
-    {
-        "pad_token": "<PAD>",
-    }
-)
+def main() -> None:
+    args: list[str] = sys.argv
+    print(f"index: {args[1]}")
 
-# この関数を呼び出してマルチプロセスでデータセットを取得は動かないので
-# get_llm_jp_dataset_multiprocessed(tokenizer)
-get_llm_jp_dataset(tokenizer)
+    tokenizer = LlamaTokenizer.from_pretrained(
+        "/bb/llm/gaf51275/jalm/jalm-tokenizer-private/tokenizer/jalm_llama_clueweb/merged_tokenizer_hf"
+    )
+    tokenizer.add_special_tokens(
+        {
+            "pad_token": "<PAD>",
+        }
+    )
+
+    get_llm_jp_dataset(tokenizer, split="train", index=args[1])  # type: ignore
+
+
+if __name__ == "__main__":
+    main()
