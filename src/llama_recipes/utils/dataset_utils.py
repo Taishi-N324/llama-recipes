@@ -113,7 +113,7 @@ def get_llm_jp_dataset(dataset_config: Type[llm_jp_dataset], tokenizer, split: s
         raw_dataset: datasets.DatasetDict = datasets.load_dataset(  # type: ignore
             path="json",
             data_files=dataset_paths,
-            num_proc=2,
+            num_proc=8,
         )
         print_rank_0(f"train raw_dataset: {raw_dataset}")
         dataset = (
@@ -122,8 +122,9 @@ def get_llm_jp_dataset(dataset_config: Type[llm_jp_dataset], tokenizer, split: s
                 lambda sample: tokenizer(sample["text"]),
                 batched=True,
                 remove_columns=list(raw_dataset["train"].features),
+                num_proc=8,
             )
-            .map(Concatenator(chunk_size=dataset_config.context_size), batched=True)
+            .map(Concatenator(chunk_size=dataset_config.context_size), batched=True, num_proc=8)
         )
         return dataset
     else:
@@ -134,7 +135,7 @@ def get_llm_jp_dataset(dataset_config: Type[llm_jp_dataset], tokenizer, split: s
         raw_dataset: datasets.DatasetDict = datasets.load_dataset(  # type: ignore
             path="json",
             data_files=dataset_paths,
-            num_proc=2,
+            num_proc=8,
         )
         print_rank_0(f"test raw_dataset: {raw_dataset}")
         dataset = (
@@ -143,8 +144,9 @@ def get_llm_jp_dataset(dataset_config: Type[llm_jp_dataset], tokenizer, split: s
                 lambda sample: tokenizer(sample["text"]),
                 batched=True,
                 remove_columns=list(raw_dataset["train"].features),
+                num_proc=8,
             )
-            .map(Concatenator(chunk_size=dataset_config.context_size), batched=True)
+            .map(Concatenator(chunk_size=dataset_config.context_size), batched=True, num_proc=8)
         )
         return dataset
 
