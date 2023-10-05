@@ -20,10 +20,10 @@ class Concatenator(object):
         if total_length >= self.chunk_size:
             chunk_num = total_length // self.chunk_size
             result = {
-                k: [v[i: i + self.chunk_size] for i in range(0, chunk_num * self.chunk_size, self.chunk_size)]
+                k: [v[i : i + self.chunk_size] for i in range(0, chunk_num * self.chunk_size, self.chunk_size)]
                 for k, v in concatenated_samples.items()
             }
-            self.residual = {k: v[(chunk_num * self.chunk_size):] for k, v in concatenated_samples.items()}
+            self.residual = {k: v[(chunk_num * self.chunk_size) :] for k, v in concatenated_samples.items()}
         else:
             result = concatenated_samples
             self.residual = {k: [] for k in concatenated_samples.keys()}
@@ -55,52 +55,12 @@ def load_dataset(split: str, tokenizer, return_dict, paths: List[str]) -> None:
     return_dict[split] = dataset[split]
 
 
-# def get_llm_jp_dataset_multiprocessed(tokenizer):
-#     manager = multiprocessing.Manager()
-#     return_dict = manager.dict()
-
-#     num_processes = 30
-#     processes = []
-
-#     # Trainデータのパスを分割
-#     train_paths = [
-#         f"/bb/llm/gaf51275/llama2-llm-jp-corpus/v1.0.2/sample/ja_cc/merged_train_{i}.jsonl" for i in range(38)
-#     ] + ["/bb/llm/gaf51275/llama2-llm-jp-corpus/v1.0.2/sample/ja_wiki/merged_train_0.jsonl"]
-
-#     chunk_size: int = len(train_paths) // num_processes
-#     print(f"chunk_size: {chunk_size}", flush=True)
-#     for i in range(num_processes):
-#         paths_chunk: list[str] = train_paths[i * chunk_size: (i + 1) * chunk_size]
-#         p = multiprocessing.Process(target=load_dataset, args=("train", tokenizer, return_dict, paths_chunk))
-#         processes.append(p)
-#         p.start()
-
-#     # Validationデータは一つのプロセスで読み込む
-#     val_paths: list[str] = [
-#         "/bb/llm/gaf51275/llama2-llm-jp-corpus/v1.0.2/sample/ja_cc/merged_val_0.jsonl",
-#         "/bb/llm/gaf51275/llama2-llm-jp-corpus/v1.0.2/sample/ja_wiki/merged_val_0.jsonl",
-#     ]
-#     p_val = multiprocessing.Process(target=load_dataset, args=("test", tokenizer, return_dict, val_paths))
-#     processes.append(p_val)
-#     p_val.start()
-
-#     for p in processes:
-#         p.join()
-
-#     # プロセス間の結果を統合
-#     combined_dataset = {}
-#     combined_dataset["train"] = sum((return_dict[f"train_{i}"] for i in range(num_processes)), [])
-#     combined_dataset["test"] = return_dict["test"]
-#     return combined_dataset
-
-def get_llm_jp_dataset(tokenizer, split: str = "train"):
+def get_llm_jp_dataset(tokenizer, split: str = "test"):
     if split == "train":
         print("dataset_paths call")
-        train_path = "/bb/llm/gaf51275/llama/datasets/llama2-llm-jp-corpus/v1.0.2/sample/ja_cc/merged_train_0.jsonl"
+        train_path = "/bb/llm/gaf51275/llama/datasets/llama2-llm-jp-corpus/v1.0.2/sample/ja_cc/merged_train_37.jsonl"
         print("train_path call")
-        dataset_paths: list[str] = [
-            train_path
-        ]
+        dataset_paths: list[str] = [train_path]
 
         raw_dataset: datasets.DatasetDict = datasets.load_dataset(  # type: ignore
             path="json",
@@ -116,7 +76,7 @@ def get_llm_jp_dataset(tokenizer, split: str = "train"):
             )
             .map(Concatenator(chunk_size=4096), batched=True)
         )
-        return dataset["train"]
+        return dataset
     else:
         dataset_paths: list[str] = [
             "/bb/llm/gaf51275/llama/datasets/llama2-llm-jp-corpus/v1.0.2/sample/ja_cc/merged_val_0.jsonl",
@@ -136,7 +96,7 @@ def get_llm_jp_dataset(tokenizer, split: str = "train"):
             )
             .map(Concatenator(chunk_size=4096), batched=True)
         )
-        return dataset["test"]
+        return dataset
 
 
 tokenizer = LlamaTokenizer.from_pretrained(
