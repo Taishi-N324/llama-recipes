@@ -15,14 +15,15 @@ non_reentrant_wrapper = partial(
     checkpoint_impl=CheckpointImpl.NO_REENTRANT,
 )
 
-check_fn = lambda submodule: isinstance(submodule, LlamaDecoderLayer)
+check_fn = lambda submodule: isinstance(submodule, LlamaDecoderLayer)  # noqa: E731
+from llama_recipes.utils.distributed import print_rank_0
 
 
 def apply_fsdp_checkpointing(model):
     """apply activation checkpointing to model
     returns None as model is updated directly
     """
-    print(f"--> applying fsdp activation checkpointing...")
+    print_rank_0("--> applying fsdp activation checkpointing...")
 
     apply_activation_checkpointing(
         model, checkpoint_wrapper_fn=non_reentrant_wrapper, check_fn=check_fn
