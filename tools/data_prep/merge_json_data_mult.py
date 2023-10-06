@@ -4,7 +4,7 @@ import shutil
 import argparse
 
 def count_mds_files(base_dir):
-    return sum(1 for filename in os.listdir(base_dir) if filename.endswith(".mds.zstd"))
+    return sum(1 for filename in os.listdir(base_dir) if filename.endswith(".mds"))
 
 def increment_filenames_and_update_index(base_dir, increment):
     index_path = os.path.join(base_dir, "index.json")
@@ -15,10 +15,7 @@ def increment_filenames_and_update_index(base_dir, increment):
 
     for filename in sorted(os.listdir(base_dir), reverse=True):
         if filename.startswith("shard."):
-            basename = filename.rsplit('.', 2)[0]  # splits the filename from the right into 2 parts based on the dot
-            extension = ".mds.zstd"
-            print("--------")
-            print(basename.split("."), 'basename.split(".")')
+            basename, extension = os.path.splitext(filename)
             prefix, number = basename.split(".")
             old_number = int(number)
             new_number = old_number + increment
@@ -28,19 +25,14 @@ def increment_filenames_and_update_index(base_dir, increment):
             new_filenames[old_filename] = new_filename
 
     for old_filename, new_filename in new_filenames.items():
-        raw_old_filename = old_filename.replace('.zstd', '')
-        raw_new_filename = new_filename.replace('.zstd', '')
         for shard in index["shards"]:
-            if shard["raw_data"]["basename"] == raw_old_filename:
-                print(raw_old_filename, raw_new_filename, shard["raw_data"]["basename"])
-                shard["raw_data"]["basename"] = raw_new_filename
-            if shard["zip_data"]["basename"] == old_filename:
-                print(old_filename, new_filename, shard["zip_data"]["basename"])
-                shard["zip_data"]["basename"] = new_filename
+            print(old_filename, new_filename, shard["raw_data"]["basename"] )
+            if shard["raw_data"]["basename"] == old_filename:
+                shard["raw_data"]["basename"] = new_filename
 
 
     with open(index_path, "w") as f:
-        print("index_path", index_path)
+        print("index_path",index_path)
         json.dump(index, f)
 
 def merge_indexes(dir1, dir2_updated):
