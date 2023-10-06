@@ -222,8 +222,7 @@ def train(
                 if (
                     rank == 0
                     and train_config.wandb_name
-                    and (step + 1) % gradient_accumulation_steps == 0
-                    or step == len(train_dataloader) - 1
+                    and ((step + 1) % gradient_accumulation_steps == 0 or step == len(train_dataloader) - 1)
                 ):
                     # gradient accumulation stepsごとにwandbにログを送る
                     wandb_stats: dict[str, Any] = {}
