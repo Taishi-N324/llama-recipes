@@ -189,7 +189,7 @@ def main(**kwargs) -> None:
     # Load the tokenizer and add special tokens
     tokenizer = LlamaTokenizer.from_pretrained(train_config.tokenizer_name)
 
-    # スペシャルトークン考えなくて良さそうだからいらないかも?
+    # スペシャルトークン考えなくて良さそうだからいらない
 
     # tokenizer.add_special_tokens(
     #     {
@@ -448,6 +448,9 @@ def main(**kwargs) -> None:
         )
     else:
         scheduler = StepLR(optimizer, step_size=1, gamma=train_config.gamma)
+
+    assert tokenizer.pad_token == None
+    
 
     # Start the training process
     results = train(
