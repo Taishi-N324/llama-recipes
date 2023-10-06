@@ -346,10 +346,10 @@ def train(
                     tflops: float = flops_per_iteration / (iteration_elapsed_time * (10**12))
                     wandb_stats["stats/tflops"] = tflops
 
-                    wandb.log(wandb_stats, step=wandb_iteration)
+                    wandb.log(wandb_stats, step=wandb_iteration + 1)
 
                     print("------------------------------------------------------------------")
-                    print(f"iteration: {wandb_iteration} , tflops: {tflops}")
+                    print(f"iteration: {wandb_iteration + 1} , tflops: {tflops}")
                     print(
                         "------------------------------------------------------------------",
                         flush=True,
@@ -376,7 +376,7 @@ def train(
                         # sampler state save
                         load_dir: str = train_config.load_checkpoint_path
                         sampler_checkpoint_path: str = load_dir + "/iter_{:07d}/sampler_checkpoint.pt".format(
-                            last_iteration
+                            wandb_iteration + 1
                         )
                         torch.save(sampler.state_dict(), sampler_checkpoint_path)  # type: ignore
 
