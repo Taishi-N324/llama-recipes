@@ -144,7 +144,9 @@ def train(
 
             try:
                 last_iteration: int = read_latest_value(f"{load_dir}/latest")
-                sampler_checkpoint_path: str = load_dir + "/iter_{:07d}/sampler_checkpoint.pt".format(last_iteration)
+                sampler_checkpoint_path: str = load_dir + "/sampler/iter_{:07d}/sampler_checkpoint.pt".format(
+                    last_iteration
+                )
                 sampler.load_state_dict(torch.load(sampler_checkpoint_path))  # type: ignore
             except FileNotFoundError or ValueError:
                 if rank == 0:
@@ -375,7 +377,8 @@ def train(
                     if rank == 0:
                         # sampler state save
                         load_dir: str = train_config.load_checkpoint_path
-                        sampler_checkpoint_path: str = load_dir + "/iter_{:07d}/sampler_checkpoint.pt".format(
+                        os.makedirs(load_dir + "/sampler/iter_{:07d}".format(wandb_iteration + 1), exist_ok=True)
+                        sampler_checkpoint_path: str = load_dir + "/sampler/iter_{:07d}/sampler_checkpoint.pt".format(
                             wandb_iteration + 1
                         )
                         torch.save(sampler.state_dict(), sampler_checkpoint_path)  # type: ignore
