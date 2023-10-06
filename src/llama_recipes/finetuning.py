@@ -53,7 +53,9 @@ from llama_recipes.utils.sequence_length_warmup import (  # noqa: F401
     SequenceLengthWarmupDataset,  # noqa: F401
     CustomDistributedSampler,
 )
-
+from streaming import StreamingDataset
+from streaming import StreamingDataLoader
+from llama_recipes.utils.streaming_dataset_utils import combined_collate_fn
 
 def main(**kwargs) -> None:
     # logging 設定
@@ -80,11 +82,20 @@ def main(**kwargs) -> None:
         global_rank = int(os.getenv("OMPI_COMM_WORLD_RANK", 0))
         local_rank = int(os.getenv("OMPI_COMM_WORLD_LOCAL_RANK", 0))
         world_size = int(os.getenv("OMPI_COMM_WORLD_SIZE", 1))
+        local_world_size = int(os.environ["OMPI_COMM_WORLD_LOCAL_SIZE"])
 
         os.environ["RANK"] = str(global_rank)
         os.environ["LOCAL_RANK"] = str(local_rank)
         os.environ["WORLD_SIZE"] = str(world_size)
+        os.environ["LOCAL_WORLD_SIZE"] = str(local_world_size)
 
+        env_vars = ["MASTER_ADDR", "MASTER_PORT", "RANK", "LOCAL_RANK", "WORLD_SIZE", "LOCAL_WORLD_SIZE"]
+        for var in env_vars:
+            if var in os.environ:
+                print(f"{var} is defined and its value is: {os.environ[var]}")
+            else:
+                print(f"{var} is not defined.")
+    
     if train_config.enable_fsdp:
         setup()
         # torchrun specific
@@ -109,6 +120,7 @@ def main(**kwargs) -> None:
             "config": wandb_configs,
         }
         wandb.init(**wandb_setting)
+        wandb.log({"dummy": 0})  # Just for debugging.
 
     if torch_distributed.is_initialized():
         torch.cuda.set_device(local_rank)  # type: ignore
@@ -214,90 +226,131 @@ def main(**kwargs) -> None:
     elif not train_config.quantization and not train_config.enable_fsdp:
         model.to("cuda")  # type: ignore
 
-    dataset_config = generate_dataset_config(train_config, kwargs)
-
-    # Load and preprocess the dataset for training and validation
-    dataset_train = get_preprocessed_dataset(
-        tokenizer,
-        dataset_config,
-        split="train",
-    )
-
-    if not train_config.enable_fsdp or rank == 0:
-        print(f"--> Training Set Length = {len(dataset_train)}")  # type: ignore
-
-    dataset_val = get_preprocessed_dataset(
-        tokenizer,
-        dataset_config,
-        split="test",
-    )
-    if not train_config.enable_fsdp or rank == 0:
-        print(f"--> Validation Set Length = {len(dataset_val)}")  # type: ignore
-
-    """
-    estimated_total_iterations: 学習にかかる iteration数
-    lr_warmup_iterations: learning rateがwarmupしきるのにかかるiterations
-    lr_decay_iterations: learning rate が cosineで落ちきるのにかかるiterations
-    """
-    estimated_total_iterations: int = (
-        train_config.num_epochs
-        * len(dataset_train)  # type: ignore
-        // (train_config.batch_size_training * world_size * train_config.gradient_accumulation_steps)
-    )
-    lr_warmup_iterations: int = int(estimated_total_iterations * train_config.lr_warmup)
-    lr_decay_iterations: int = int(estimated_total_iterations * train_config.lr_decay)
-
-    dataset_length: int = len(dataset_train)  # type: ignore
-    if rank == 0:
-        print(f"dataset_train: {dataset_length}")  # type: ignore
-
-    train_sampler = None
-    val_sampler = None
-    if train_config.enable_fsdp:
-        train_sampler = CustomDistributedSampler(
-            dataset_train,
-            rank=torch_distributed.get_rank(),
-            num_replicas=torch_distributed.get_world_size(),
-            shuffle=True,
-            seed=train_config.seed,
+    if train_config.use_streaming_datasets:
+        #仮の値
+        dataset_train_length_streaming = 1000 
+        estimated_total_iterations: int = (
+            train_config.num_epochs
+            * dataset_train_length_streaming  # type: ignore
+            // (train_config.batch_size_training * world_size * train_config.gradient_accumulation_steps)
         )
-        if train_config.run_validation:
-            val_sampler = DistributedSampler(
-                dataset_val,
-                rank=torch_distributed.get_rank(),
-                num_replicas=torch_distributed.get_world_size(),
-                seed=train_config.seed,
-            )
+        lr_warmup_iterations: int = int(estimated_total_iterations * train_config.lr_warmup)
+        lr_decay_iterations: int = int(estimated_total_iterations * train_config.lr_decay)
 
-    # Create DataLoaders for the training and validation dataset
-    # NOTE: we need to set worker_init_fn to set seed for each worker
-    def worker_init_fn(worker_id: int) -> None:
-        worker_seed = train_config.seed + worker_id
-        np.random.seed(worker_seed)
-        random.seed(worker_seed)
+        if rank == 0:
+            print(f"dataset_train: {dataset_train_length_streaming}")  # type: ignore
+    else:
 
-    train_dataloader: DataLoader = DataLoader(
-        dataset=dataset_train,
-        batch_size=train_config.batch_size_training,
-        num_workers=train_config.num_workers_dataloader,
-        pin_memory=True,
-        sampler=train_sampler if train_sampler else None,
-        drop_last=True,
-        collate_fn=default_data_collator,
-        worker_init_fn=worker_init_fn,
-    )
+        dataset_config = generate_dataset_config(train_config, kwargs)
 
-    eval_dataloader: typing.Optional[DataLoader] = None
-    if train_config.run_validation:
-        eval_dataloader = DataLoader(
-            dataset_val,
-            batch_size=train_config.val_batch_size,
+        # Load and preprocess the dataset for training and validation
+        dataset_train = get_preprocessed_dataset(
+            tokenizer,
+            dataset_config,
+            split="train",
+        )
+
+        if not train_config.enable_fsdp or rank == 0:
+            print(f"--> Training Set Length = {len(dataset_train)}")  # type: ignore
+
+        dataset_val = get_preprocessed_dataset(
+            tokenizer,
+            dataset_config,
+            split="test",
+        )
+        if not train_config.enable_fsdp or rank == 0:
+            print(f"--> Validation Set Length = {len(dataset_val)}")  # type: ignore
+
+        """
+        estimated_total_iterations: 学習にかかる iteration数
+        lr_warmup_iterations: learning rateがwarmupしきるのにかかるiterations
+        lr_decay_iterations: learning rate が cosineで落ちきるのにかかるiterations
+        """
+        estimated_total_iterations: int = (
+            train_config.num_epochs
+            * len(dataset_train)  # type: ignore
+            // (train_config.batch_size_training * world_size * train_config.gradient_accumulation_steps)
+        )
+        lr_warmup_iterations: int = int(estimated_total_iterations * train_config.lr_warmup)
+        lr_decay_iterations: int = int(estimated_total_iterations * train_config.lr_decay)
+
+        dataset_length: int = len(dataset_train)  # type: ignore
+        if rank == 0:
+            print(f"dataset_train: {dataset_length}")  # type: ignore
+
+    # streaming-mosaicmlの組み込み
+    if train_config.use_streaming_datasets:
+        # UnboundLocalError 回避
+        train_sampler = None
+        val_sampler = None
+
+        print("train_config.streaming_datasets_train_path",train_config.streaming_datasets_train_path)
+        dataset_train = StreamingDataset(local=train_config.streaming_datasets_train_path, split=None, shuffle=True)
+        train_dataloader = StreamingDataLoader(
+            dataset_train,
+            batch_size=train_config.batch_size_training,
             num_workers=train_config.num_workers_dataloader,
             pin_memory=True,
-            sampler=val_sampler if val_sampler else None,
+            collate_fn=lambda b: combined_collate_fn(b, max_seq_len=train_config.sequence_length),
+        )
+        dataset_val = StreamingDataset(local=train_config.streaming_datasets_val_path, split=None, shuffle=True)
+        eval_dataloader = StreamingDataLoader(
+            dataset_val,
+            batch_size=train_config.batch_size_training,
+            num_workers=train_config.num_workers_dataloader,
+            pin_memory=True,
+            collate_fn=lambda b: combined_collate_fn(b, max_seq_len=train_config.sequence_length),
+        )
+        
+    # デフォルト実装
+    else:
+        train_sampler = None
+        val_sampler = None
+        if train_config.enable_fsdp:
+            train_sampler = CustomDistributedSampler(
+                dataset_train,
+                rank=torch_distributed.get_rank(),
+                num_replicas=torch_distributed.get_world_size(),
+                shuffle=True,
+                seed=train_config.seed,
+            )
+            if train_config.run_validation:
+                val_sampler = DistributedSampler(
+                    dataset_val,
+                    rank=torch_distributed.get_rank(),
+                    num_replicas=torch_distributed.get_world_size(),
+                    seed=train_config.seed,
+                )
+
+        # Create DataLoaders for the training and validation dataset
+        # NOTE: we need to set worker_init_fn to set seed for each worker
+        def worker_init_fn(worker_id: int) -> None:
+            worker_seed = train_config.seed + worker_id
+            np.random.seed(worker_seed)
+            random.seed(worker_seed)
+
+        train_dataloader: DataLoader = DataLoader(
+            dataset=dataset_train,
+            batch_size=train_config.batch_size_training,
+            num_workers=train_config.num_workers_dataloader,
+            pin_memory=True,
+            sampler=train_sampler if train_sampler else None,
             drop_last=True,
             collate_fn=default_data_collator,
+            worker_init_fn=worker_init_fn,
         )
+
+        eval_dataloader: typing.Optional[DataLoader] = None
+        if train_config.run_validation:
+            eval_dataloader = DataLoader(
+                dataset_val,
+                batch_size=train_config.val_batch_size,
+                num_workers=train_config.num_workers_dataloader,
+                pin_memory=True,
+                sampler=val_sampler if val_sampler else None,
+                drop_last=True,
+                collate_fn=default_data_collator,
+            )
 
     # Initialize the optimizer and learning rate scheduler
     if fsdp_config.pure_bf16 and fsdp_config.optimizer == "anyprecision":
@@ -319,13 +372,18 @@ def main(**kwargs) -> None:
             eps=train_config.adamw_eps,
             weight_decay=train_config.weight_decay,
         )
+    
+    if train_config.use_streaming_datasets:
+        # TODO assert処理を組み込む?
+        pass
+    else:
+        print_rank_0(
+            f"Estimated total iterations ({estimated_total_iterations}) vs. {train_config.num_epochs * len(train_dataloader) // train_config.gradient_accumulation_steps}"
+        )
 
-    print_rank_0(
-        f"Estimated total iterations ({estimated_total_iterations}) vs. {train_config.num_epochs * len(train_dataloader) // train_config.gradient_accumulation_steps}"
-    )
-    assert estimated_total_iterations == (
-        train_config.num_epochs * len(train_dataloader) // train_config.gradient_accumulation_steps
-    )
+        assert estimated_total_iterations == (
+            train_config.num_epochs * len(train_dataloader) // train_config.gradient_accumulation_steps
+        )
 
     # wandb config update
     if train_config.wandb_name is not None and rank == 0:

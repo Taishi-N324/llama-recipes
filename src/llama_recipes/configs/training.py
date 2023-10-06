@@ -7,8 +7,8 @@ from typing import Optional
 
 @dataclass
 class train_config:
-    model_name: str = "llama-2-7b"
-    tokenizer_name: str = "llama-2-7b"
+    model_name: str = "/home/acf15834ji/.cache/huggingface/hub/models--meta-llama--Llama-2-13b-hf/snapshots/db6b8eb1feabb38985fdf785a89895959e944936"
+    tokenizer_name: str = "/home/acf15834ji/.cache/huggingface/hub/models--meta-llama--Llama-2-13b-hf/snapshots/db6b8eb1feabb38985fdf785a89895959e944936"
     enable_fsdp: bool = False
     low_cpu_fsdp: bool = False
     run_validation: bool = False
@@ -49,4 +49,7 @@ class train_config:
     save_interval_iteration: int = 100
     use_fast_kernels: bool = True  # Enable using SDPA from PyTorch Accelerated Transformers, make use Flash Attention and Xformer memory-efficient kernels
     use_mpi: bool = False
+    use_streaming_datasets: bool = True
+    streaming_datasets_train_path: str = "/bb/llm/gaf51275/llama/taishi-work-streaming/ABCI-llama-recipes/tools/data_prep/samsum"
+    streaming_datasets_val_path: str = "/bb/llm/gaf51275/llama/taishi-work-streaming/ABCI-llama-recipes/tools/data_prep/samsum2"
     wandb_name: Optional[str] = None
