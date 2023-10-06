@@ -29,6 +29,7 @@ from typing import Optional, Type, Any
 import wandb
 
 from llama_recipes.utils.sequence_length_warmup import SequenceLengthWarmupDistributedSampler
+import json
 
 
 def set_tokenizer_params(tokenizer: LlamaTokenizer):
@@ -373,6 +374,20 @@ def train(
                     # 全プロセスがcheckpointを保存し終えるまで待つ
                     if train_config.enable_fsdp:
                         torch_distributed.barrier()
+                    if rank == 0:
+                        # 念の為にstreamingがどこまでいったか保存
+                        wandb_stats_streaming: dict[str, Any] = {}
+                        state_dict_streaming = train_dataloader.state_dict()
+                        wandb_stats_streaming["streaming/epoch"] = state_dict_streaming['epoch']
+                        wandb_stats_streaming["streaming/sample_in_epoch"] = state_dict_streaming['sample_in_epoch']
+                        wandb_stats_streaming["streaming/num_canonical_nodes"] = state_dict_streaming['num_canonical_nodes']
+                        wandb_stats_streaming["streaming/shuffle_seed"] = state_dict_streaming['shuffle_seed']
+                        wandb.log(wandb_stats, step=wandb_iteration)
+
+                        # 最新情報を書き込む それ以外はwandbのログを元に置き換える
+                        with open(train_config.latest_streaming_datasets_checkpoint_path, "w") as file:
+                            json.dump(state_dict_streaming, file)
+
                     if rank == 0:
                         # sampler state save
                         load_dir: str = train_config.load_checkpoint_path

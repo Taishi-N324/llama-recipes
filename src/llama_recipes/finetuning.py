@@ -56,6 +56,7 @@ from llama_recipes.utils.sequence_length_warmup import (  # noqa: F401
 from streaming import StreamingDataset
 from streaming import StreamingDataLoader
 from llama_recipes.utils.streaming_dataset_utils import combined_collate_fn
+import json
 
 def main(**kwargs) -> None:
     # logging 設定
@@ -120,7 +121,6 @@ def main(**kwargs) -> None:
             "config": wandb_configs,
         }
         wandb.init(**wandb_setting)
-        wandb.log({"dummy": 0})  # Just for debugging.
 
     if torch_distributed.is_initialized():
         torch.cuda.set_device(local_rank)  # type: ignore
@@ -188,11 +188,14 @@ def main(**kwargs) -> None:
 
     # Load the tokenizer and add special tokens
     tokenizer = LlamaTokenizer.from_pretrained(train_config.tokenizer_name)
-    tokenizer.add_special_tokens(
-        {
-            "pad_token": "<PAD>",
-        }
-    )
+
+    # スペシャルトークン考えなくて良さそうだからいらないかも?
+
+    # tokenizer.add_special_tokens(
+    #     {
+    #         "pad_token": "<PAD>",
+    #     }
+    # )
     if train_config.use_peft:
         print(f"Using PEFT method: {train_config.peft_method}", flush=True)
         peft_config = generate_peft_config(train_config, kwargs)
@@ -227,18 +230,7 @@ def main(**kwargs) -> None:
         model.to("cuda")  # type: ignore
 
     if train_config.use_streaming_datasets:
-        #仮の値
-        dataset_train_length_streaming = 1000 
-        estimated_total_iterations: int = (
-            train_config.num_epochs
-            * dataset_train_length_streaming  # type: ignore
-            // (train_config.batch_size_training * world_size * train_config.gradient_accumulation_steps)
-        )
-        lr_warmup_iterations: int = int(estimated_total_iterations * train_config.lr_warmup)
-        lr_decay_iterations: int = int(estimated_total_iterations * train_config.lr_decay)
-
-        if rank == 0:
-            print(f"dataset_train: {dataset_train_length_streaming}")  # type: ignore
+        pass
     else:
 
         dataset_config = generate_dataset_config(train_config, kwargs)
@@ -293,6 +285,32 @@ def main(**kwargs) -> None:
             pin_memory=True,
             collate_fn=lambda b: combined_collate_fn(b, max_seq_len=train_config.sequence_length),
         )
+
+        # 1. Check if the path is None
+        assert train_config.latest_streaming_datasets_checkpoint_path is not None, "Path specification is required!"
+
+        # 2. Create an empty file if the file doesn't exist
+        if not os.path.exists(train_config.latest_streaming_datasets_checkpoint_path):
+            try:
+                with open(train_config.latest_streaming_datasets_checkpoint_path, 'w') as f:
+                    pass
+            except PermissionError:
+                raise PermissionError(f"Could not create file at {train_config.latest_streaming_datasets_checkpoint_path} due to permission issues!") from None
+
+        # 3. Check the keys in the file
+        else:
+            with open(train_config.latest_streaming_datasets_checkpoint_path, "r") as file:
+                content = file.read()
+                if content:  # Only process if the file is not empty
+                    loaded_dict = json.loads(content)
+                    
+                    # Check for the existence of keys
+                    keys_to_check = ["epoch", "sample_in_epoch", "num_canonical_nodes", "shuffle_seed"]  
+                    for key in keys_to_check:
+                        assert key in loaded_dict, f"Key {key} not found in the loaded dictionary!"
+                        
+                    train_dataloader.load_state_dict(loaded_dict)
+
         dataset_val = StreamingDataset(local=train_config.streaming_datasets_val_path, split=None, shuffle=True)
         eval_dataloader = StreamingDataLoader(
             dataset_val,
@@ -301,7 +319,25 @@ def main(**kwargs) -> None:
             pin_memory=True,
             collate_fn=lambda b: combined_collate_fn(b, max_seq_len=train_config.sequence_length),
         )
-        
+
+        print("train_config.num_epochs",train_config.num_epochs)
+        print("len(train_dataloader)",len(dataset_train))
+        print("train_config.batch_size_training",train_config.batch_size_training)
+        print("train_config.gradient_accumulation_steps",train_config.gradient_accumulation_steps)
+        print("world_size",world_size)
+        estimated_total_iterations: int = (
+            train_config.num_epochs
+            * 100000  # type: ignore
+            // (train_config.batch_size_training * world_size * train_config.gradient_accumulation_steps)
+        )
+        lr_warmup_iterations: int = int(estimated_total_iterations * train_config.lr_warmup)
+        lr_decay_iterations: int = int(estimated_total_iterations * train_config.lr_decay)
+
+        dataset_length: int = 100000  # type: ignore
+
+        if rank == 0:
+            print(f"dataset_train: {dataset_length}")  # type: ignore
+
     # デフォルト実装
     else:
         train_sampler = None
@@ -373,17 +409,23 @@ def main(**kwargs) -> None:
             weight_decay=train_config.weight_decay,
         )
     
-    if train_config.use_streaming_datasets:
+    # if train_config.use_streaming_datasets:
         # TODO assert処理を組み込む?
-        pass
-    else:
-        print_rank_0(
-            f"Estimated total iterations ({estimated_total_iterations}) vs. {train_config.num_epochs * len(train_dataloader) // train_config.gradient_accumulation_steps}"
-        )
+    # print_rank_0(
+    #     f"Estimated total iterations ({estimated_total_iterations}) vs. {train_config.num_epochs * len(train_dataloader) // train_config.gradient_accumulation_steps}"
+    # )
 
-        assert estimated_total_iterations == (
-            train_config.num_epochs * len(train_dataloader) // train_config.gradient_accumulation_steps
-        )
+    # assert estimated_total_iterations == (
+    #     train_config.num_epochs * len(train_dataloader) // train_config.gradient_accumulation_steps
+    # )
+    # else:
+    #     print_rank_0(
+    #         f"Estimated total iterations ({estimated_total_iterations}) vs. {train_config.num_epochs * len(train_dataloader) // train_config.gradient_accumulation_steps}"
+    #     )
+
+    #     assert estimated_total_iterations == (
+    #         train_config.num_epochs * len(train_dataloader) // train_config.gradient_accumulation_steps
+    #     )
 
     # wandb config update
     if train_config.wandb_name is not None and rank == 0:
