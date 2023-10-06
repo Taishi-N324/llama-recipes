@@ -88,7 +88,7 @@ mkdir -p $CHECKPOINTS_PATH
 export HF_HOME=/bb/llm/gaf51275/.cache/huggingface
 
 # checkpoint path
-CHECKPOINTS_PATH=/groups/gaf51217/fujii/checkpoints/llama-recipes/llama-2-7b-gbs_${GLOBAL_BATCH_SIZE}
+CHECKPOINTS_PATH=/bb/llm/gaf51275/llama/taishi-work-streaming/ABCI-llama-recipes/scripts/abci/7b/llama-2-7b-gbs_1024
 mkdir -p $CHECKPOINTS_PATH
 
 # run

@@ -13,7 +13,7 @@ module load nccl/2.16/2.16.2-1
 module load hpcx/2.12
 
 # swich virtual env
-cd /home/acf15649kv/work/finetune/llama-recipes
+cd /bb/llm/gaf51275/llama/taishi-work-streaming/ABCI-llama-recipes
 source .env/bin/activate
 
 # distributed settings
@@ -83,14 +83,14 @@ SEED=42
 NUM_WORKERS_DATALOADER=2
 
 # checkpoint path
-CHECKPOINTS_PATH=/groups/gaf51217/fujii/checkpoints/llama-2-13b/llama-recipies
+CHECKPOINTS_PATH=/bb/llm/gaf51275/llama/checkpoints/llama-2-13b-streamint-test/llama-recipies
 mkdir -p $CHECKPOINTS_PATH
 
 # hugginface setting
 export HF_HOME=/scratch/$(whoami)/.cache/huggingface/
 
 # checkpoint path
-CHECKPOINTS_PATH=/groups/gaf51217/fujii/checkpoints/llama-recipes/llama-2-13b-gbs_${GLOBAL_BATCH_SIZE}
+CHECKPOINTS_PATH=/bb/llm/gaf51275/llama/checkpoints/llama-2-13b-streamint-test-taishi/llama-recipies
 
 # run
 mpirun -np $NUM_GPUS \
@@ -107,7 +107,8 @@ mpirun -np $NUM_GPUS \
   --mixed_precision \
   --use_fp16 \
   --num_epochs $NUM_EPOCHS \
-  --model_name /groups/gaf51217/fujii/finetune/llama2/Llama-2-13b-hf \
+  --model_name /bb/llm/gaf51275/jalm/Llama-2-13b-chat-merged-tokenizer-hf \
+  --tokenizer_name /bb/llm/gaf51275/jalm/jalm-tokenizer-private/tokenizer/jalm_llama_clueweb/merged_tokenizer_hf \
   --batch_size_training $BATCH_SIZE \
   --gradient_accumulation_steps $GRADIENT_ACCUMULATION_STEPS \
   --lr $LR \
@@ -118,7 +119,7 @@ mpirun -np $NUM_GPUS \
   --weight_decay $WEIGHT_DECAY \
   --fsdp_activation_checkpointing \
   --seed $SEED \
-  --dataset "ja_wikipedia_dataset" \
+  --dataset "samsum_dataset" \
   --num_workers_dataloader $NUM_WORKERS_DATALOADER \
   --save_model \
   --save_optimizer \
