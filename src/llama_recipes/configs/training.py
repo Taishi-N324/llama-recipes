@@ -15,7 +15,7 @@ class train_config:
     batch_size_training: int = 4
     gradient_accumulation_steps: int = 1
     clip_grad_norm: float = 1.0
-    num_epochs: int = 1
+    num_epochs: int = 10
     num_workers_dataloader: int = 1
     lr: float = 1e-4
     lr_min: float = 1e-5
@@ -50,6 +50,7 @@ class train_config:
     use_fast_kernels: bool = True  # Enable using SDPA from PyTorch Accelerated Transformers, make use Flash Attention and Xformer memory-efficient kernels
     use_mpi: bool = False
     use_streaming_datasets: bool = True
-    streaming_datasets_train_path: str = "/bb/llm/gaf51275/llama/taishi-work-streaming/ABCI-llama-recipes/tools/data_prep/samsum"
+    streaming_datasets_train_path: str = "/bb/llm/gaf51275/llama/datasets/llama2-llm-jp-corpus/v1.0.2/sample/streaming_ja/ja_wiki_no_zstd/train/"
     streaming_datasets_val_path: str = "/bb/llm/gaf51275/llama/taishi-work-streaming/ABCI-llama-recipes/tools/data_prep/samsum2"
+    latest_streaming_datasets_checkpoint_path: str = "/bb/llm/gaf51275/llama/taishi-work-streaming/ABCI-llama-recipes/scripts/abci/13b/latest.json"
     wandb_name: Optional[str] = None
