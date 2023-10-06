@@ -73,8 +73,6 @@ LR_DECAY_STYLE="cosine"
 WEIGHT_DECAY=0.1
 
 EPS=1e-5
-BETA_1=0.9
-BETA_2=0.95
 
 # seed
 SEED=42
@@ -110,7 +108,6 @@ mpirun -np $NUM_GPUS \
   --gradient_accumulation_steps $GRADIENT_ACCUMULATION_STEPS \
   --lr $LR \
   --adamw_eps $EPS \
-  --adamw_betas $BETA_1 $BETA_2 \
   --lr_min $LR_MIN \
   --lr_warmup $LR_WARMUP \
   --lr_decay $LR_DECAY \
@@ -118,7 +115,7 @@ mpirun -np $NUM_GPUS \
   --weight_decay $WEIGHT_DECAY \
   --fsdp_activation_checkpointing \
   --seed $SEED \
-  --dataset "llm_jp_dataset" \
+  --dataset "ja_wikipedia_dataset" \
   --num_workers_dataloader $NUM_WORKERS_DATALOADER \
   --save_model \
   --save_optimizer \
