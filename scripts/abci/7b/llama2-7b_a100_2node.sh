@@ -13,7 +13,7 @@ module load nccl/2.16/2.16.2-1
 module load hpcx/2.12
 
 # swich virtual env
-cd /bb/llm/gaf51275/llama/llama-recipes
+cd /bb/llm/gaf51275/llama/taishi-work-streaming/ABCI-llama-recipes
 source .env/bin/activate
 
 # distributed settings
@@ -106,8 +106,8 @@ mpirun -np $NUM_GPUS \
   --mixed_precision \
   --pure_bf16 \
   --num_epochs $NUM_EPOCHS \
-  --model_name /groups/gaf51217/fujii/finetune/llama2/Llama-2-7b-hf \
-  --tokenizer_name /groups/gaf51217/fujii/finetune/llama2/Llama-2-7b-hf \
+  --model_name /home/acf15834ji/.cache/huggingface/hub/models--meta-llama--Llama-2-7b-hf/snapshots/6fdf2e60f86ff2481f2241aaee459f85b5b0bbb9 \
+  --tokenizer_name /home/acf15834ji/.cache/huggingface/hub/models--meta-llama--Llama-2-7b-hf/snapshots/6fdf2e60f86ff2481f2241aaee459f85b5b0bbb9 \
   --batch_size_training $BATCH_SIZE \
   --gradient_accumulation_steps $GRADIENT_ACCUMULATION_STEPS \
   --lr $LR \
