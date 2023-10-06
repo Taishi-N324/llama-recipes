@@ -20,7 +20,7 @@ cd tools/data_prep
 
 tokenizer_path="/bb/llm/gaf51275/jalm/jalm-tokenizer-private/tokenizer/jalm_llama_clueweb/merged_tokenizer_hf"
 
-for i in {0..15}; do
+for i in {16..20}; do
     input_path="/bb/llm/gaf51275/llama/datasets/llama2-llm-jp-corpus/v1.0.2/sample/ja_cc/merged_train_${i}.jsonl"
     output_path="/bb/llm/gaf51275/llama/datasets/llama2-llm-jp-corpus/v1.0.2/sample/streaming_ja/13b_real/ja_cc_train_${i}/"
     

@@ -77,7 +77,8 @@ class ConcatTokensDataset(IterableDataset):
                 f'You specified --concat_tokens with --bos_text, but your BOS text is not tokenizing to one token\
                 , instead we got {self.bos_tokens}. Quit if this was in error.')
 
-        self.eos_tokens = self.tokenizer(self.eos_text,
+        # self.tokenizer.eos_token
+        self.eos_tokens = self.tokenizer(self.tokenizer.eos_token,
                                          truncation=False,
                                          padding=False,
                                          add_special_tokens=False)['input_ids']
