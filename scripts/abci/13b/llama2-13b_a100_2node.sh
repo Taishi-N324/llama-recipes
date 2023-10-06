@@ -122,6 +122,7 @@ mpirun -np $NUM_GPUS \
     --save_interval_iteration 100 \
     --save_checkpoint_path $CHECKPOINTS_PATH \
     --load_checkpoint_path $CHECKPOINTS_PATH \
+    --run_validation \
     --use_mpi \
     --use_fast_kernels \
     --use_sequence_length_schedule \
