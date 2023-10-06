@@ -73,8 +73,8 @@ def get_ja_wikipedia_dataset(dataset_config: Type[ja_wikipedia_dataset], tokeniz
     """
     raw_dataset: datasets.DatasetDict = datasets.load_dataset(  # type: ignore
         path="json",
-        data_files=[dataset_config.path],
-        num_proc=2,
+        data_files=["/bb/llm/gaf51275/llama/datasets/llama2-llm-jp-corpus/v1.0.2/sample/ja_wiki/merged_train_0.jsonl"],
+        num_proc=8,
     )
     print_rank_0(f"raw_dataset: {raw_dataset}")
 
@@ -90,8 +90,9 @@ def get_ja_wikipedia_dataset(dataset_config: Type[ja_wikipedia_dataset], tokeniz
             lambda sample: tokenizer(sample["text"]),
             batched=True,
             remove_columns=list(raw_dataset["train"].features),
+            num_proc=8,
         )
-        .map(Concatenator(chunk_size=dataset_config.context_size), batched=True)
+        .map(Concatenator(chunk_size=dataset_config.context_size), batched=True, num_proc=8)
     )
 
     split_dataset: datasets.DatasetDict = dataset.train_test_split(test_size=0.05)
@@ -107,7 +108,8 @@ def get_ja_wikipedia_dataset(dataset_config: Type[ja_wikipedia_dataset], tokeniz
 def get_llm_jp_dataset(dataset_config: Type[llm_jp_dataset], tokenizer, split: str = "train"):
     if split == "train":
         dataset_paths: list[str] = [
-            f"/bb/llm/gaf51275/llama/datasets/llama2-llm-jp-corpus/v1.0.2/sample/ja_cc/merged_train_{i}.jsonl" for i in range(38)
+            f"/bb/llm/gaf51275/llama/datasets/llama2-llm-jp-corpus/v1.0.2/sample/ja_cc/merged_train_{i}.jsonl"
+            for i in range(38)
         ] + ["/bb/llm/gaf51275/llama/datasets/llama2-llm-jp-corpus/v1.0.2/sample/ja_wiki/merged_train_0.jsonl"]
 
         raw_dataset: datasets.DatasetDict = datasets.load_dataset(  # type: ignore
