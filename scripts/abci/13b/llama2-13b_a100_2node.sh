@@ -1,6 +1,6 @@
 #!/bin/bash
 #$ -l rt_AF=2
-#$ -l h_rt=24:00:00
+#$ -l h_rt=13:00:00:00
 #$ -j y
 #$ -o outputs/13b/
 #$ -cwd
@@ -65,12 +65,16 @@ if (($GRADIENT_ACCUMULATION_STEPS < 1)); then
 fi
 
 # optimizer
-LR=1e-4
+LR=3e-5
 LR_MIN=1e-5
 LR_DECAY=0.80
 LR_WARMUP=0.05
 LR_DECAY_STYLE="cosine"
 WEIGHT_DECAY=0.1
+
+EPS=1e-5
+BETA_1=0.9
+BETA_2=0.95
 
 # seed
 SEED=42
@@ -79,7 +83,7 @@ SEED=42
 NUM_WORKERS_DATALOADER=2
 
 # checkpoint path
-CHECKPOINTS_PATH=/bb/llm/gaf51275/checkpoints/llama/llama-2-13b
+CHECKPOINTS_PATH=/bb/llm/gaf51275/llama/checkpoints/llama-2-13b-gbs_${GLOBAL_BATCH_SIZE}-${NODE_TYPE}_${NHOSTS}
 mkdir -p $CHECKPOINTS_PATH
 
 # hugginface setting
@@ -105,6 +109,8 @@ mpirun -np $NUM_GPUS \
   --batch_size_training $BATCH_SIZE \
   --gradient_accumulation_steps $GRADIENT_ACCUMULATION_STEPS \
   --lr $LR \
+  --adamw_eps $EPS \
+  --adamw_betas $BETA_1 $BETA_2 \
   --lr_min $LR_MIN \
   --lr_warmup $LR_WARMUP \
   --lr_decay $LR_DECAY \
@@ -121,4 +127,5 @@ mpirun -np $NUM_GPUS \
   --load_checkpoint_path $CHECKPOINTS_PATH \
   --use_mpi \
   --use_fast_kernels \
+  --use_sequence_length_schedule \
   --wandb_name "llama2-13b_${NODE_TYPE}_${NHOSTS}_FSDP_${NUM_GPUS}_GLOBAL_BATCH_SIZE_${GLOBAL_BATCH_SIZE}"
