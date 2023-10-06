@@ -15,7 +15,7 @@ module load nccl/2.16/2.16.2-1
 module load hpcx/2.12
 
 # swich virtual env
-cd /bb/llm/gaf51275/llama/llama-recipes
+cd /bb/llm/gaf51275/llama/taishi-work-streaming/ABCI-llama-recipes
 source .env/bin/activate
 
 # pip version up
@@ -38,4 +38,11 @@ pip install huggingface_hub
 pip install ninja packaging wheel
 pip install flash-attn --no-build-isolation
 
-# timm を install しようとすると、torch 2.0.1を強制的にinstallさせてくるので注意
+# install mosaicml-streaming
+pip install mosaicml-streaming
+
+# # timm を install しようとすると、torch 2.0.1を強制的にinstallさせてくるので注意
+
+# 昨日自分が追加でインストールしたもの 最新のflash attention 2.3.1はエラーが起こる 
+# pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu118
+# pip install flash-attn==2.3.0
