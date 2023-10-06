@@ -1,6 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # This software may be used and distributed according to the terms of the Llama 2 Community License Agreement.
-
+from __future__ import annotations
 from pathlib import Path
 from datetime import datetime
 import torch
@@ -36,7 +36,10 @@ from typing import Type, Any, Optional
 
 from llama_recipes.configs.fsdp import fsdp_config
 from llama_recipes.utils.distributed import print_rank_0, is_rank_0
-from llama_recipes.policies import AnyPrecisionAdamW
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from torch.optim import AdamW
+    from anymodule import AnyPrecisionAdamW  # あなたのモジュール名に合わせて変更してください。
 
 
 def get_date_of_run() -> str:
@@ -54,7 +57,7 @@ fullstate_save_policy = FullStateDictConfig(offload_to_cpu=True, rank0_only=True
 
 def load_model_sharded(
     model: FSDP,
-    optimizer: torch.optim.AdamW | AnyPrecisionAdamW,
+    optimizer: AdamW | AnyPrecisionAdamW,
     scheduler: torch.optim.lr_scheduler.LRScheduler,
     rank: int,
     cfg: Type[train_config],
@@ -122,7 +125,7 @@ def save_model_and_optimizer_sharded(
     model: FSDP,
     rank: int,
     cfg: Type[train_config],
-    optimizer: Optional[torch.optim.AdamW | AnyPrecisionAdamW] = None,
+    optimizer: Optional[AdamW | AnyPrecisionAdamW] = None,
     scheduler: Optional[torch.optim.lr_scheduler.LRScheduler] = None,
     epoch: Optional[int] = None,
     iteration: Optional[int] = None,
@@ -311,7 +314,7 @@ def load_sharded_model_single_gpu(model, model_path: str):
 
 def save_checkpoint(
     model,
-    optimizer: torch.optim.AdamW | AnyPrecisionAdamW,
+    optimizer: AdamW | AnyPrecisionAdamW,
     scheduler: torch.optim.lr_scheduler.LRScheduler,
     train_config: Type[train_config],
     fsdp_config: Type[fsdp_config],
