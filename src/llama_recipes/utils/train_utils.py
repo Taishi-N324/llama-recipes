@@ -367,6 +367,20 @@ def train(
                         flush=True,
                     )
 
+
+                    # if train_config.run_validation:
+                    #     eval_ppl, eval_epoch_loss = evaluation(
+                    #         model=model,
+                    #         train_config=train_config,
+                    #         eval_dataloader=eval_dataloader,  # type: ignore
+                    #         local_rank=local_rank,
+                    #         tokenizer=tokenizer,
+                    #     )
+                    #     wandb_stats["val/ppl"] = eval_ppl
+                    #     wandb_stats["val/loss"] = eval_epoch_loss
+
+                    # wandb.log(wandb_stats, step=wandb_iteration + 1)
+
                 if (
                     wandb_iteration + 1
                 ) % train_config.save_interval_iteration == 0 and not train_config.use_peft:
@@ -435,55 +449,6 @@ def train(
                 f"CPU Total Peak Memory consumed during the train (max): {memtrace.cpu_peaked + memtrace.cpu_begin} GB"
             )
 
-        if train_config.run_validation:
-            eval_ppl, eval_epoch_loss = evaluation(
-                model=model,
-                train_config=train_config,
-                eval_dataloader=eval_dataloader,  # type: ignore
-                local_rank=local_rank,
-                tokenizer=tokenizer,
-            )
-            checkpoint_start_time = time.perf_counter()
-            if train_config.save_model:
-                if train_config.enable_fsdp:
-                    torch_distributed.barrier()
-                if train_config.use_peft:
-                    if train_config.enable_fsdp:
-                        if rank == 0:
-                            print("we are about to save the PEFT modules")
-                    else:
-                        print("we are about to save the PEFT modules")
-                    model.save_pretrained(train_config.output_dir)
-                    if train_config.enable_fsdp:
-                        if rank == 0:
-                            print(f"PEFT modules are saved in {train_config.output_dir} directory")
-                    else:
-                        print(f"PEFT modules are saved in {train_config.output_dir} directory")
-
-                else:
-                    save_checkpoint(
-                        model=model,
-                        optimizer=optimizer,
-                        scheduler=lr_scheduler,
-                        train_config=train_config,
-                        fsdp_config=fsdp_config,  # type: ignore
-                        rank=rank if rank is not None else 0,
-                        epoch=epoch,
-                        iteration=epoch * len(train_dataloader),
-                    )
-                if train_config.enable_fsdp:
-                    torch_distributed.barrier()
-            checkpoint_end_time = time.perf_counter() - checkpoint_start_time
-            checkpoint_times.append(checkpoint_end_time)
-            if eval_epoch_loss < best_val_loss:
-                best_val_loss = eval_epoch_loss
-                if train_config.enable_fsdp:
-                    if rank == 0:
-                        print(f"best eval loss on epoch {epoch} is {best_val_loss}")
-                else:
-                    print(f"best eval loss on epoch {epoch} is {best_val_loss}")
-            val_loss.append(best_val_loss)
-            val_prep.append(eval_ppl)
         if train_config.enable_fsdp:
             if rank == 0:
                 print(
@@ -561,9 +526,16 @@ def evaluation(
                 eval_loss += loss.detach().float()
             # Decode predictions and add to evaluation predictions list
             preds = torch.argmax(outputs.logits, -1)
-            eval_preds.extend(
-                tokenizer.batch_decode(preds.detach().cpu().numpy(), skip_special_tokens=True)
-            )
+
+            # sp用
+            token_ids_batch = preds.detach().cpu().numpy()
+            eval_preds_sp = [tokenizer.DecodeIds(token_ids.tolist()) for token_ids in token_ids_batch]
+            eval_preds.extend(eval_preds_sp)
+
+            # hf用
+            # eval_preds.extend(
+            #     tokenizer.batch_decode(preds.detach().cpu().numpy(), skip_special_tokens=True)
+            # )
 
     # If there's more than one CUDA device, reduce evaluation loss across all devices
     if torch.cuda.device_count() > 1 and train_config.enable_fsdp:

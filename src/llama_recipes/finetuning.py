@@ -57,6 +57,7 @@ from streaming import StreamingDataset
 from streaming import StreamingDataLoader
 from llama_recipes.utils.streaming_dataset_utils import combined_collate_fn
 import json
+import sentencepiece as spm
 
 def main(**kwargs) -> None:
     # logging 設定
@@ -187,7 +188,10 @@ def main(**kwargs) -> None:
         model.to(torch.bfloat16)  # type: ignore
 
     # Load the tokenizer ABCIのLLMでは、paddingはしません
-    tokenizer = LlamaTokenizer.from_pretrained(train_config.tokenizer_name)
+    # hfならこれ
+    # tokenizer = LlamaTokenizer.from_pretrained(train_config.tokenizer_name)
+    tokenizer = spm.SentencePieceProcessor()
+    tokenizer.Load(train_config.tokenizer_name)
 
     if train_config.use_peft:
         print(f"Using PEFT method: {train_config.peft_method}", flush=True)
@@ -426,7 +430,6 @@ def main(**kwargs) -> None:
     else:
         scheduler = StepLR(optimizer, step_size=1, gamma=train_config.gamma)
 
-    assert tokenizer.pad_token == None
     
 
     # Start the training process
