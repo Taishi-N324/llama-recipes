@@ -127,4 +127,5 @@ mpirun -np $NUM_GPUS \
   --load_checkpoint_path $CHECKPOINTS_PATH \
   --use_mpi \
   --use_fast_kernels \
+  --use_sequence_length_schedule \
   --wandb_name "llama2-13b_${NODE_TYPE}_${NHOSTS}_FSDP_${NUM_GPUS}_GLOBAL_BATCH_SIZE_${GLOBAL_BATCH_SIZE}"

@@ -459,7 +459,7 @@ def main(**kwargs) -> None:
         eval_dataloader=eval_dataloader,
         sampler=train_sampler,  # type: ignore
         tokenizer=tokenizer,
-        optimizer=optimizer,
+        optimizer=optimizer,  # type: ignore
         lr_scheduler=scheduler,
         gradient_accumulation_steps=train_config.gradient_accumulation_steps,
         train_config=train_config,

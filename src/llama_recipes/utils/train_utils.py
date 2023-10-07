@@ -134,22 +134,25 @@ def train(
             rank=rank if rank is not None else 0,
             cfg=train_config,
         )
-        # sampler state load
-        load_dir: str = train_config.load_checkpoint_path
+        # TODO streaming時skip
+        # # sampler state load
+        # load_dir: str = train_config.load_checkpoint_path
 
-        if not Path(load_dir).exists():
-            if rank == 0:
-                print("No checkpoint directory found...skipping")
-        else:
-            from llama_recipes.model_checkpointing.checkpoint_handler import read_latest_value
+        # if not Path(load_dir).exists():
+        #     if rank == 0:
+        #         print("No checkpoint directory found...skipping")
+        # else:
+        #     from llama_recipes.model_checkpointing.checkpoint_handler import read_latest_value
 
-            try:
-                last_iteration: int = read_latest_value(f"{load_dir}/latest")
-                sampler_checkpoint_path: str = load_dir + "/iter_{:07d}/sampler_checkpoint.pt".format(last_iteration)
-                sampler.load_state_dict(torch.load(sampler_checkpoint_path))  # type: ignore
-            except FileNotFoundError or ValueError:
-                if rank == 0:
-                    print("No latest iteration file found")
+        #     try:
+        #         last_iteration: int = read_latest_value(f"{load_dir}/latest")
+        #         sampler_checkpoint_path: str = (
+        #             load_dir + "/sampler/iter_{:07d}/sampler_checkpoint.pt".format(last_iteration)
+        #         )
+        #         sampler.load_state_dict(torch.load(sampler_checkpoint_path))  # type: ignore
+        #     except FileNotFoundError or ValueError:
+        #         if rank == 0:
+        #             print("No latest iteration file found")
 
         if train_config.enable_fsdp:
             torch_distributed.barrier()
@@ -171,9 +174,13 @@ def train(
 
             accumulation_loss: float = 0.0
             # checkpointをloadした場合は、次のステップから始める
-            next_step: int = last_iteration * gradient_accumulation_steps if last_iteration != 0 else 0
+            next_step: int = (
+                last_iteration * gradient_accumulation_steps if last_iteration != 0 else 0
+            )
             for step, batch in enumerate(train_dataloader, start=next_step):
-                wandb_iteration = epoch * len(train_dataloader) + step // gradient_accumulation_steps
+                wandb_iteration = (
+                    epoch * len(train_dataloader) + step // gradient_accumulation_steps
+                )
                 if train_config.use_sequence_length_schedule:
                     # sequence length warmup
                     current_seq_len: int = min(4096, max(64, 64 + 4 * wandb_iteration))
@@ -197,7 +204,9 @@ def train(
                 if train_config.use_fp16:
                     # if fp16 is enabled, use gradient scaler to handle gradient update
                     scaler.scale(loss).backward()  # type: ignore
-                    if (step + 1) % gradient_accumulation_steps == 0 or step == len(train_dataloader) - 1:
+                    if (step + 1) % gradient_accumulation_steps == 0 or step == len(
+                        train_dataloader
+                    ) - 1:
                         scaler.step(optimizer)  # type: ignore (suppress ubound error)
                         scaler.update()  # type: ignore (suppress ubound error)
                         optimizer.zero_grad()
@@ -206,7 +215,9 @@ def train(
                 else:
                     # regular backpropagation when fp16 is not used
                     loss.backward()
-                    if (step + 1) % gradient_accumulation_steps == 0 or step == len(train_dataloader) - 1:
+                    if (step + 1) % gradient_accumulation_steps == 0 or step == len(
+                        train_dataloader
+                    ) - 1:
                         optimizer.step()
                         optimizer.zero_grad()
                         lr_scheduler.step()
@@ -223,7 +234,7 @@ def train(
                 if (
                     rank == 0
                     and train_config.wandb_name
-                    and ((step + 1) % gradient_accumulation_steps == 0 or step == len(train_dataloader) - 1)
+                    and (step + 1) % gradient_accumulation_steps == 0
                 ):
                     print(int(os.getenv("OMPI_COMM_WORLD_RANK", 0)),"--------------")
                     # gradient accumulation stepsごとにwandbにログを送る
@@ -231,7 +242,9 @@ def train(
 
                     # training info
                     wandb_stats["training/loss"] = accumulation_loss
-                    wandb_stats["training/perplexity"] = torch.exp(torch.tensor(accumulation_loss).clone().detach())
+                    wandb_stats["training/perplexity"] = torch.exp(
+                        torch.tensor(accumulation_loss).clone().detach()
+                    )
                     accumulation_loss = 0.0
 
                     # utils info
@@ -239,7 +252,9 @@ def train(
                     sequence_length: int = batch["input_ids"].shape[1]
 
                     wandb_stats["utils/batch_size"] = batch_size
-                    wandb_stats["utils/global_batch_size"] = batch_size * world_size * gradient_accumulation_steps
+                    wandb_stats["utils/global_batch_size"] = (
+                        batch_size * world_size * gradient_accumulation_steps
+                    )
                     wandb_stats["utils/seq_len"] = sequence_length
                     wandb_stats["utils/gradient_accumulation_steps"] = gradient_accumulation_steps
                     wandb_stats["utils/epoch"] = epoch
@@ -316,17 +331,29 @@ def train(
                     iteration_start_time = time.perf_counter()
 
                     tokens_per_sec = (
-                        batch_size * sequence_length * gradient_accumulation_steps / iteration_elapsed_time * world_size
+                        batch_size
+                        * sequence_length
+                        * gradient_accumulation_steps
+                        / iteration_elapsed_time
+                        * world_size
                     )
                     wandb_stats["stats/1_iteration_time"] = iteration_elapsed_time
                     wandb_stats["stats/tokens_pef_sec"] = tokens_per_sec
-                    wandb_stats["stats/30B_tokens_day"] = 30 * (1000**3) / tokens_per_sec / 60 / 60 / 24
-                    wandb_stats["stats/300B_tokens_day"] = 300 * (1000**3) / tokens_per_sec / 60 / 60 / 24
-                    wandb_stats["stats/1T_tokens_day"] = (1000**4) / tokens_per_sec / 60 / 60 / 24
+                    wandb_stats["stats/30B_tokens_day"] = (
+                        30 * (1000**3) / tokens_per_sec / 60 / 60 / 24
+                    )
+                    wandb_stats["stats/300B_tokens_day"] = (
+                        300 * (1000**3) / tokens_per_sec / 60 / 60 / 24
+                    )
+                    wandb_stats["stats/1T_tokens_day"] = (
+                        (1000**4) / tokens_per_sec / 60 / 60 / 24
+                    )
                     wandb_stats["stats/tokens_per_sec_per_gpu"] = tokens_per_sec / world_size
 
                     checkpoint_activations_factor = 3
-                    if fsdp_config is not None and fsdp_config.fsdp_activation_checkpointing:  # type ignore
+                    if (
+                        fsdp_config is not None and fsdp_config.fsdp_activation_checkpointing
+                    ):  # type ignore
                         checkpoint_activations_factor = 4
 
                     num_layers: int = model.config.num_hidden_layers
@@ -343,21 +370,25 @@ def train(
                         * num_layers
                         * (hidden_size**2)
                     ) * (
-                        1.0 + (sequence_length / (6.0 * hidden_size)) + (vocab_size / (16.0 * num_layers * hidden_size))
+                        1.0
+                        + (sequence_length / (6.0 * hidden_size))
+                        + (vocab_size / (16.0 * num_layers * hidden_size))
                     )
                     tflops: float = flops_per_iteration / (iteration_elapsed_time * (10**12))
                     wandb_stats["stats/tflops"] = tflops
 
-                    wandb.log(wandb_stats, step=wandb_iteration)
+                    wandb.log(wandb_stats, step=wandb_iteration + 1)
 
                     print("------------------------------------------------------------------")
-                    print(f"iteration: {wandb_iteration} , tflops: {tflops}")
+                    print(f"iteration: {wandb_iteration + 1} , tflops: {tflops}")
                     print(
                         "------------------------------------------------------------------",
                         flush=True,
                     )
 
-                if (wandb_iteration + 1) % train_config.save_interval_iteration == 0 and not train_config.use_peft:
+                if (
+                    wandb_iteration + 1
+                ) % train_config.save_interval_iteration == 0 and not train_config.use_peft:
                     # 全プロセスがcheckpointを保存できるような状態になるまで待つ
                     if train_config.enable_fsdp:
                         torch_distributed.barrier()
@@ -388,13 +419,21 @@ def train(
                         with open(train_config.latest_streaming_datasets_checkpoint_path, "w") as file:
                             json.dump(state_dict_streaming, file)
 
-                    if rank == 0:
-                        # sampler state save
-                        load_dir: str = train_config.load_checkpoint_path
-                        sampler_checkpoint_path: str = load_dir + "/iter_{:07d}/sampler_checkpoint.pt".format(
-                            last_iteration
-                        )
-                        torch.save(sampler.state_dict(), sampler_checkpoint_path)  # type: ignore
+                    # streamingは保存しない
+                    # if rank == 0:
+                    #     # sampler state save
+                    #     load_dir: str = train_config.load_checkpoint_path
+                    #     os.makedirs(
+                    #         load_dir + "/sampler/iter_{:07d}".format(wandb_iteration + 1),
+                    #         exist_ok=True,
+                    #     )
+                    #     sampler_checkpoint_path: str = (
+                    #         load_dir
+                    #         + "/sampler/iter_{:07d}/sampler_checkpoint.pt".format(
+                    #             wandb_iteration + 1
+                    #         )
+                    #     )
+                    #     torch.save(sampler.state_dict(), sampler_checkpoint_path)  # type: ignore
 
         epoch_end_time = time.perf_counter() - epoch_start_time
         epoch_times.append(epoch_end_time)
@@ -436,7 +475,7 @@ def train(
                 tokenizer=tokenizer,
             )
             checkpoint_start_time = time.perf_counter()
-            if train_config.save_model and eval_epoch_loss < best_val_loss:
+            if train_config.save_model:
                 if train_config.enable_fsdp:
                     torch_distributed.barrier()
                 if train_config.use_peft:
@@ -486,7 +525,9 @@ def train(
                 f"Epoch {epoch+1}: train_perplexity={train_perplexity:.4f}, train_epoch_loss={train_epoch_loss:.4f}, epoch time {epoch_end_time}s"  # noqa: E501
             )
     avg_epoch_time = sum(epoch_times) / len(epoch_times)
-    avg_checkpoint_time = sum(checkpoint_times) / len(checkpoint_times) if len(checkpoint_times) > 0 else 0
+    avg_checkpoint_time = (
+        sum(checkpoint_times) / len(checkpoint_times) if len(checkpoint_times) > 0 else 0
+    )
     avg_train_prep = sum(train_prep) / len(train_prep)
     avg_train_loss = sum(train_loss) / len(train_loss)
     if train_config.run_validation:
@@ -535,7 +576,9 @@ def evaluation(
     eval_loss = 0.0  # Initialize evaluation loss
 
     with MemoryTrace() as memtrace:  # noqa: F841
-        for step, batch in enumerate(tqdm(eval_dataloader, colour="green", desc="evaluating Epoch")):
+        for step, batch in enumerate(
+            tqdm(eval_dataloader, colour="green", desc="evaluating Epoch")
+        ):
             for key in batch.keys():
                 if train_config.enable_fsdp:
                     batch[key] = batch[key].to(local_rank)
@@ -549,7 +592,9 @@ def evaluation(
                 eval_loss += loss.detach().float()
             # Decode predictions and add to evaluation predictions list
             preds = torch.argmax(outputs.logits, -1)
-            eval_preds.extend(tokenizer.batch_decode(preds.detach().cpu().numpy(), skip_special_tokens=True))
+            eval_preds.extend(
+                tokenizer.batch_decode(preds.detach().cpu().numpy(), skip_special_tokens=True)
+            )
 
     # If there's more than one CUDA device, reduce evaluation loss across all devices
     if torch.cuda.device_count() > 1 and train_config.enable_fsdp:
@@ -684,7 +729,9 @@ def save_train_params(train_config, fsdp_config, rank):
     """
     # Convert the train_config and fsdp_config objects to dictionaries,
     # converting all values to strings to ensure they can be serialized into a YAML file
-    train_config_dict = {k: str(v) for k, v in vars(train_config).items() if not k.startswith("__")}
+    train_config_dict = {
+        k: str(v) for k, v in vars(train_config).items() if not k.startswith("__")
+    }
     fsdp_config_dict = {k: str(v) for k, v in vars(fsdp_config).items() if not k.startswith("__")}
     # Merge the two dictionaries into one
     train_params_dict = {**train_config_dict, **fsdp_config_dict}

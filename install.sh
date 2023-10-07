@@ -36,7 +36,7 @@ pip install huggingface_hub
 
 # install flash-atten
 pip install ninja packaging wheel
-pip install flash-attn --no-build-isolation
+pip install flash-attn==2.3.0 --no-build-isolation
 
 # install mosaicml-streaming
 pip install mosaicml-streaming

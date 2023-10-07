@@ -123,7 +123,7 @@ mpirun -np $NUM_GPUS \
   --num_workers_dataloader $NUM_WORKERS_DATALOADER \
   --save_model \
   --save_optimizer \
-  --save_interval_iteration 10 \
+  --save_interval_iteration 50 \
   --save_checkpoint_path $CHECKPOINTS_PATH \
   --use_mpi \
   --use_fast_kernels \

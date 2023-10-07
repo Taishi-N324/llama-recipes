@@ -45,8 +45,8 @@ class train_config:
     save_model: bool = True
     save_checkpoint_path: str = ""
     save_optimizer: bool = True  # will be used if using FSDP
-    load_checkpoint_path: str = ""
-    save_interval_iteration: int = 100
+    load_checkpoint_path: str = "/bb/llm/gaf51275/llama/checkpoints/llama-2-13b-streamint-test-taishi/llama-recipies"
+    save_interval_iteration: int = 10
     use_fast_kernels: bool = True  # Enable using SDPA from PyTorch Accelerated Transformers, make use Flash Attention and Xformer memory-efficient kernels
     use_mpi: bool = False
     use_streaming_datasets: bool = True
