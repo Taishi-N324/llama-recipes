@@ -52,5 +52,4 @@ class train_config:
     use_streaming_datasets: bool = True
     streaming_datasets_train_path: str = "/bb/llm/gaf51275/llama/datasets/llama2-llm-jp-corpus/v1.0.2/sample/streaming_ja/ja_wiki_no_zstd/train/"
     streaming_datasets_val_path: str = "/bb/llm/gaf51275/llama/taishi-work-streaming/ABCI-llama-recipes/tools/data_prep/samsum2"
-    latest_streaming_datasets_checkpoint_path: str = "/bb/llm/gaf51275/llama/taishi-work-streaming/ABCI-llama-recipes/scripts/abci/13b/latest.json"
     wandb_name: Optional[str] = None

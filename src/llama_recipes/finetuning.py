@@ -186,16 +186,9 @@ def main(**kwargs) -> None:
     if train_config.enable_fsdp and fsdp_config.pure_bf16:
         model.to(torch.bfloat16)  # type: ignore
 
-    # Load the tokenizer and add special tokens
+    # Load the tokenizer ABCIのLLMでは、paddingはしません
     tokenizer = LlamaTokenizer.from_pretrained(train_config.tokenizer_name)
 
-    # スペシャルトークン考えなくて良さそうだからいらない
-
-    # tokenizer.add_special_tokens(
-    #     {
-    #         "pad_token": "<PAD>",
-    #     }
-    # )
     if train_config.use_peft:
         print(f"Using PEFT method: {train_config.peft_method}", flush=True)
         peft_config = generate_peft_config(train_config, kwargs)
@@ -287,19 +280,20 @@ def main(**kwargs) -> None:
         )
 
         # 1. Check if the path is None
-        assert train_config.latest_streaming_datasets_checkpoint_path is not None, "Path specification is required!"
+        latest_streaming_datasets_checkpoint_path = os.path.join(train_config.load_checkpoint_path, "latest_streaming_info.json")
+        assert latest_streaming_datasets_checkpoint_path is not None, "Path specification is required!"
 
         # 2. Create an empty file if the file doesn't exist
-        if not os.path.exists(train_config.latest_streaming_datasets_checkpoint_path):
+        if not os.path.exists(latest_streaming_datasets_checkpoint_path):
             try:
-                with open(train_config.latest_streaming_datasets_checkpoint_path, 'w') as f:
+                with open(latest_streaming_datasets_checkpoint_path, 'w') as f:
                     pass
             except PermissionError:
-                raise PermissionError(f"Could not create file at {train_config.latest_streaming_datasets_checkpoint_path} due to permission issues!") from None
+                raise PermissionError(f"Could not create file at {latest_streaming_datasets_checkpoint_path} due to permission issues!") from None
 
         # 3. Check the keys in the file
         else:
-            with open(train_config.latest_streaming_datasets_checkpoint_path, "r") as file:
+            with open(latest_streaming_datasets_checkpoint_path, "r") as file:
                 content = file.read()
                 if content:  # Only process if the file is not empty
                     loaded_dict = json.loads(content)
@@ -308,6 +302,7 @@ def main(**kwargs) -> None:
                     keys_to_check = ["epoch", "sample_in_epoch", "num_canonical_nodes", "shuffle_seed"]  
                     for key in keys_to_check:
                         assert key in loaded_dict, f"Key {key} not found in the loaded dictionary!"
+                    print(f"state_dict_streaming load info {loaded_dict} ")
                         
                     train_dataloader.load_state_dict(loaded_dict)
 
@@ -409,24 +404,6 @@ def main(**kwargs) -> None:
             weight_decay=train_config.weight_decay,
         )
     
-    # if train_config.use_streaming_datasets:
-        # TODO assert処理を組み込む?
-    # print_rank_0(
-    #     f"Estimated total iterations ({estimated_total_iterations}) vs. {train_config.num_epochs * len(train_dataloader) // train_config.gradient_accumulation_steps}"
-    # )
-
-    # assert estimated_total_iterations == (
-    #     train_config.num_epochs * len(train_dataloader) // train_config.gradient_accumulation_steps
-    # )
-    # else:
-    #     print_rank_0(
-    #         f"Estimated total iterations ({estimated_total_iterations}) vs. {train_config.num_epochs * len(train_dataloader) // train_config.gradient_accumulation_steps}"
-    #     )
-
-    #     assert estimated_total_iterations == (
-    #         train_config.num_epochs * len(train_dataloader) // train_config.gradient_accumulation_steps
-    #     )
-
     # wandb config update
     if train_config.wandb_name is not None and rank == 0:
         # iteration info

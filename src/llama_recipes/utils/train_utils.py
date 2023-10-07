@@ -134,25 +134,6 @@ def train(
             rank=rank if rank is not None else 0,
             cfg=train_config,
         )
-        # TODO streaming時skip
-        # # sampler state load
-        # load_dir: str = train_config.load_checkpoint_path
-
-        # if not Path(load_dir).exists():
-        #     if rank == 0:
-        #         print("No checkpoint directory found...skipping")
-        # else:
-        #     from llama_recipes.model_checkpointing.checkpoint_handler import read_latest_value
-
-        #     try:
-        #         last_iteration: int = read_latest_value(f"{load_dir}/latest")
-        #         sampler_checkpoint_path: str = (
-        #             load_dir + "/sampler/iter_{:07d}/sampler_checkpoint.pt".format(last_iteration)
-        #         )
-        #         sampler.load_state_dict(torch.load(sampler_checkpoint_path))  # type: ignore
-        #     except FileNotFoundError or ValueError:
-        #         if rank == 0:
-        #             print("No latest iteration file found")
 
         if train_config.enable_fsdp:
             torch_distributed.barrier()
@@ -416,24 +397,12 @@ def train(
                         wandb.log(wandb_stats, step=wandb_iteration)
 
                         # 最新情報を書き込む それ以外はwandbのログを元に置き換える
-                        with open(train_config.latest_streaming_datasets_checkpoint_path, "w") as file:
+                        latest_streaming_datasets_checkpoint_path = os.path.join(train_config.load_checkpoint_path, "latest_streaming_info.json")
+                        with open(latest_streaming_datasets_checkpoint_path, "w") as file:
                             json.dump(state_dict_streaming, file)
+                            print(f"state_dict_streaming info {state_dict_streaming} ")
+                            print(f"state_dict_streaming saved successfully {latest_streaming_datasets_checkpoint_path} ")
 
-                    # streamingは保存しない
-                    # if rank == 0:
-                    #     # sampler state save
-                    #     load_dir: str = train_config.load_checkpoint_path
-                    #     os.makedirs(
-                    #         load_dir + "/sampler/iter_{:07d}".format(wandb_iteration + 1),
-                    #         exist_ok=True,
-                    #     )
-                    #     sampler_checkpoint_path: str = (
-                    #         load_dir
-                    #         + "/sampler/iter_{:07d}/sampler_checkpoint.pt".format(
-                    #             wandb_iteration + 1
-                    #         )
-                    #     )
-                    #     torch.save(sampler.state_dict(), sampler_checkpoint_path)  # type: ignore
 
         epoch_end_time = time.perf_counter() - epoch_start_time
         epoch_times.append(epoch_end_time)
