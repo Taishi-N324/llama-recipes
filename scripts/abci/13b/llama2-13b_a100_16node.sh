@@ -1,5 +1,5 @@
 #!/bin/bash
-#$ -l rt_AF=8
+#$ -l rt_AF=16
 #$ -l h_rt=4:00:00
 #$ -j y
 #$ -o outputs/13B/
@@ -108,7 +108,7 @@ mpirun -np $NUM_GPUS \
   --use_fp16 \
   --num_epochs $NUM_EPOCHS \
   --model_name /bb/llm/gaf51275/jalm/Llama-2-13b-chat-merged-tokenizer-hf \
-  --tokenizer_name /bb/llm/gaf51275/jalm/jalm-tokenizer-private/tokenizer/jalm_llama_clueweb/merged_tokenizer_hf \
+  --tokenizer_name /bb/llm/gaf51275/jalm/jalm-tokenizer-private/tokenizer/jalm_llama_clueweb/merged_tokenizer_sp/jalm_llama.model \
   --batch_size_training $BATCH_SIZE \
   --gradient_accumulation_steps $GRADIENT_ACCUMULATION_STEPS \
   --lr $LR \

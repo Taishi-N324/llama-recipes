@@ -108,7 +108,7 @@ mpirun -np $NUM_GPUS \
   --use_fp16 \
   --num_epochs $NUM_EPOCHS \
   --model_name /bb/llm/gaf51275/jalm/Llama-2-13b-chat-merged-tokenizer-hf \
-  --tokenizer_name /bb/llm/gaf51275/jalm/jalm-tokenizer-private/tokenizer/jalm_llama_clueweb/merged_tokenizer_hf \
+  --tokenizer_name /bb/llm/gaf51275/jalm/jalm-tokenizer-private/tokenizer/jalm_llama_clueweb/merged_tokenizer_sp/jalm_llama.model \
   --batch_size_training $BATCH_SIZE \
   --gradient_accumulation_steps $GRADIENT_ACCUMULATION_STEPS \
   --lr $LR \
@@ -123,7 +123,7 @@ mpirun -np $NUM_GPUS \
   --num_workers_dataloader $NUM_WORKERS_DATALOADER \
   --save_model \
   --save_optimizer \
-  --save_interval_iteration 50 \
+  --save_interval_iteration 10 \
   --save_checkpoint_path $CHECKPOINTS_PATH \
   --use_mpi \
   --use_fast_kernels \
