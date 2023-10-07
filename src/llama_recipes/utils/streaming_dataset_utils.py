@@ -13,8 +13,8 @@ def intermediate_collate_fn(batch: List[Dict[str, Any]], max_seq_len: int) -> Di
 def combined_collate_fn(batch: List[Dict[str, Any]], max_seq_len: int) -> Dict[str, Any]:
     intermediate_result = intermediate_collate_fn(batch, max_seq_len)
 
-    # input_idsからattention_maskを計算 padなしで1のみ
-    attention_mask = torch.ones_like(intermediate_result['input_ids'])
+    # input_idsからattention_maskを計算 今回事前にトークナイズする時はpadされてないと思うが念の為
+    attention_mask = (intermediate_result['input_ids'] != 0).long()
 
 
     labels = intermediate_result['input_ids'].clone()
