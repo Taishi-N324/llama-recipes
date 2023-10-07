@@ -11,7 +11,7 @@ class train_config:
     tokenizer_name: str = "/home/acf15834ji/.cache/huggingface/hub/models--meta-llama--Llama-2-13b-hf/snapshots/db6b8eb1feabb38985fdf785a89895959e944936"
     enable_fsdp: bool = False
     low_cpu_fsdp: bool = False
-    run_validation: bool = False
+    run_validation: bool = True
     batch_size_training: int = 4
     gradient_accumulation_steps: int = 1
     clip_grad_norm: float = 1.0
@@ -45,7 +45,7 @@ class train_config:
     save_model: bool = True
     save_checkpoint_path: str = ""
     save_optimizer: bool = True  # will be used if using FSDP
-    load_checkpoint_path: str = "/bb/llm/gaf51275/llama/checkpoints/llama-2-13b-streamint-test-taishi/llama-recipies"
+    load_checkpoint_path: str = ""
     save_interval_iteration: int = 10
     use_fast_kernels: bool = True  # Enable using SDPA from PyTorch Accelerated Transformers, make use Flash Attention and Xformer memory-efficient kernels
     use_mpi: bool = False

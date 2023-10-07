@@ -83,14 +83,14 @@ SEED=42
 NUM_WORKERS_DATALOADER=2
 
 # checkpoint path
-CHECKPOINTS_PATH=/bb/llm/gaf51275/llama/checkpoints/llama-2-13b-streamint-test/llama-recipies
+CHECKPOINTS_PATH=/bb/llm/gaf51275/llama/checkpoints/llama-2-13b-streamint-test-taishi/llama-recipies-bf16-warmup-eval
 mkdir -p $CHECKPOINTS_PATH
 
 # hugginface setting
 export HF_HOME=/scratch/$(whoami)/.cache/huggingface/
 
 # checkpoint path
-CHECKPOINTS_PATH=/bb/llm/gaf51275/llama/checkpoints/llama-2-13b-streamint-test-taishi/llama-recipies
+CHECKPOINTS_PATH=/bb/llm/gaf51275/llama/checkpoints/llama-2-13b-streamint-test-taishi/llama-recipies-bf16-warmup-eval
 
 # run
 mpirun -np $NUM_GPUS \
@@ -105,7 +105,7 @@ mpirun -np $NUM_GPUS \
   --low_cpu_fsdp \
   --peft_method None \
   --mixed_precision \
-  --use_fp16 \
+  --pure_bf16 \
   --num_epochs $NUM_EPOCHS \
   --model_name /bb/llm/gaf51275/jalm/Llama-2-13b-chat-merged-tokenizer-hf \
   --tokenizer_name /bb/llm/gaf51275/jalm/jalm-tokenizer-private/tokenizer/jalm_llama_clueweb/merged_tokenizer_sp/jalm_llama.model \
@@ -116,10 +116,11 @@ mpirun -np $NUM_GPUS \
   --lr_warmup $LR_WARMUP \
   --lr_decay $LR_DECAY \
   --lr_decay_style $LR_DECAY_STYLE \
+  --use_sequence_length_schedule \
   --weight_decay $WEIGHT_DECAY \
   --fsdp_activation_checkpointing \
   --seed $SEED \
-  --dataset "samsum_dataset" \
+  --dataset "bf16-warmup-eval-test" \
   --num_workers_dataloader $NUM_WORKERS_DATALOADER \
   --save_model \
   --save_optimizer \
