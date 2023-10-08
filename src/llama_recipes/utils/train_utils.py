@@ -367,20 +367,6 @@ def train(
                         flush=True,
                     )
 
-
-                    # if train_config.run_validation:
-                    #     eval_ppl, eval_epoch_loss = evaluation(
-                    #         model=model,
-                    #         train_config=train_config,
-                    #         eval_dataloader=eval_dataloader,  # type: ignore
-                    #         local_rank=local_rank,
-                    #         tokenizer=tokenizer,
-                    #     )
-                    #     wandb_stats["val/ppl"] = eval_ppl
-                    #     wandb_stats["val/loss"] = eval_epoch_loss
-
-                    # wandb.log(wandb_stats, step=wandb_iteration + 1)
-
                 if (
                     wandb_iteration + 1
                 ) % train_config.save_interval_iteration == 0 and not train_config.use_peft:
@@ -408,10 +394,10 @@ def train(
                         wandb_stats_streaming["streaming/sample_in_epoch"] = state_dict_streaming['sample_in_epoch']
                         wandb_stats_streaming["streaming/num_canonical_nodes"] = state_dict_streaming['num_canonical_nodes']
                         wandb_stats_streaming["streaming/shuffle_seed"] = state_dict_streaming['shuffle_seed']
-                        wandb.log(wandb_stats, step=wandb_iteration)
+                        wandb.log(wandb_stats, step=wandb_iteration + 1)
 
                         # 最新情報を書き込む それ以外はwandbのログを元に置き換える
-                        latest_streaming_datasets_checkpoint_path = os.path.join(train_config.load_checkpoint_path, "latest_streaming_info.json")
+                        latest_streaming_datasets_checkpoint_path = os.path.join(train_config.save_checkpoint_path, "latest_streaming_info.json")
                         with open(latest_streaming_datasets_checkpoint_path, "w") as file:
                             json.dump(state_dict_streaming, file)
                             print(f"state_dict_streaming info {state_dict_streaming} ")
@@ -513,6 +499,7 @@ def evaluation(
         for step, batch in enumerate(
             tqdm(eval_dataloader, colour="green", desc="evaluating Epoch")
         ):
+
             for key in batch.keys():
                 if train_config.enable_fsdp:
                     batch[key] = batch[key].to(local_rank)
