@@ -289,11 +289,12 @@ def main(**kwargs) -> None:
 
         # 2. Create an empty file if the file doesn't exist
         if not os.path.exists(latest_streaming_datasets_checkpoint_path):
+            save_streaming_datasets_checkpoint_path = os.path.join(train_config.save_checkpoint_path, "latest_streaming_info.json")
             try:
-                with open(latest_streaming_datasets_checkpoint_path, 'w') as f:
+                with open(save_streaming_datasets_checkpoint_path, 'w') as f:
                     pass
             except PermissionError:
-                raise PermissionError(f"Could not create file at {latest_streaming_datasets_checkpoint_path} due to permission issues!") from None
+                raise PermissionError(f"Could not create file at {save_streaming_datasets_checkpoint_path} due to permission issues!") from None
 
         # 3. Check the keys in the file
         else:
@@ -324,15 +325,16 @@ def main(**kwargs) -> None:
             print("train_config.batch_size_training",train_config.batch_size_training)
             print("train_config.gradient_accumulation_steps",train_config.gradient_accumulation_steps)
             print("world_size",world_size)
-        estimated_total_iterations: int = (
-            train_config.num_epochs
-            * 100000  # type: ignore
-            // (train_config.batch_size_training * world_size * train_config.gradient_accumulation_steps)
-        )
+        # estimated_total_iterations: int = (
+        #     train_config.num_epochs
+        #     * 100000  # type: ignore
+        #     // (train_config.batch_size_training * world_size * train_config.gradient_accumulation_steps)
+        # )
+        estimated_total_iterations = 36000
         lr_warmup_iterations: int = int(estimated_total_iterations * train_config.lr_warmup)
         lr_decay_iterations: int = int(estimated_total_iterations * train_config.lr_decay)
 
-        dataset_length: int = 100000  # type: ignore
+        dataset_length: int = 36463349  # type: ignore
 
         if rank == 0:
             print(f"dataset_train: {dataset_length}")  # type: ignore
