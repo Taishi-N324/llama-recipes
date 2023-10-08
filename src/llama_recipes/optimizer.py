@@ -22,7 +22,10 @@ class WarmupCosineAnnealingLR(_LRScheduler):
         if self.last_epoch < self.warmup_iterations:
             # Linear warmup
             warmup_ratio: float = self.last_epoch / self.warmup_iterations
-            return [max(base_lr * warmup_ratio, self.eta_min) for base_lr in self.base_lrs]
+            return [
+                max(self.eta_min + (base_lr - self.eta_min) * warmup_ratio, self.eta_min)
+                for base_lr in self.base_lrs
+            ]
         elif self.last_epoch < self.decay_iterations:
             # Cosine annealing
             progress: float = (self.last_epoch - self.warmup_iterations) / (
