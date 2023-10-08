@@ -272,8 +272,8 @@ def main(**kwargs) -> None:
         # UnboundLocalError 回避
         train_sampler = None
         val_sampler = None
-
-        print("train_config.streaming_datasets_train_path",train_config.streaming_datasets_train_path)
+        if rank == 0:
+            print("train_config.streaming_datasets_train_path",train_config.streaming_datasets_train_path)
         dataset_train = StreamingDataset(local=train_config.streaming_datasets_train_path, split=None, shuffle=True)
         train_dataloader = StreamingDataLoader(
             dataset_train,
@@ -318,12 +318,12 @@ def main(**kwargs) -> None:
             pin_memory=True,
             collate_fn=lambda b: combined_collate_fn(b, max_seq_len=train_config.sequence_length),
         )
-
-        print("train_config.num_epochs",train_config.num_epochs)
-        print("len(train_dataloader)",len(dataset_train))
-        print("train_config.batch_size_training",train_config.batch_size_training)
-        print("train_config.gradient_accumulation_steps",train_config.gradient_accumulation_steps)
-        print("world_size",world_size)
+        if rank == 0:
+            print("train_config.num_epochs",train_config.num_epochs)
+            print("len(train_dataloader)",len(dataset_train))
+            print("train_config.batch_size_training",train_config.batch_size_training)
+            print("train_config.gradient_accumulation_steps",train_config.gradient_accumulation_steps)
+            print("world_size",world_size)
         estimated_total_iterations: int = (
             train_config.num_epochs
             * 100000  # type: ignore
