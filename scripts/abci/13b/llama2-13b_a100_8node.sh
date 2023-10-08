@@ -1,6 +1,6 @@
 #!/bin/bash
 #$ -l rt_AF=8
-#$ -l h_rt=4:00:00
+#$ -l h_rt=55:00:00:00
 #$ -j y
 #$ -o outputs/13B/
 #$ -cwd
@@ -71,8 +71,8 @@ fi
 # optimizer
 LR=1e-4
 LR_MIN=1e-5
-LR_DECAY=0.80
-LR_WARMUP=0.05
+LR_DECAY=0.8
+LR_WARMUP=0.027777777777777776
 LR_DECAY_STYLE="cosine"
 WEIGHT_DECAY=0.1
 
@@ -82,15 +82,12 @@ SEED=42
 # dataset
 NUM_WORKERS_DATALOADER=2
 
-# checkpoint path
-CHECKPOINTS_PATH=/bb/llm/gaf51275/llama/checkpoints/llama-2-13b-streamint-test-taishi/llama-recipies-bf16-warmup-eval
-mkdir -p $CHECKPOINTS_PATH
-
 # hugginface setting
 export HF_HOME=/scratch/$(whoami)/.cache/huggingface/
 
 # checkpoint path
-CHECKPOINTS_PATH=/bb/llm/gaf51275/llama/checkpoints/llama-2-13b-streamint-test-taishi/llama-recipies-bf16-warmup-eval
+CHECKPOINTS_PATH=/bb/llm/gaf51275/llama/checkpoints/llama-2-13b-performance/llama2-13b_${NODE_TYPE}_${NHOSTS}_FSDP_${NUM_GPUS}_GLOBAL_BATCH_SIZE_${GLOBAL_BATCH_SIZE}/cc_wiki
+mkdir -p $CHECKPOINTS_PATH
 
 # run
 mpirun -np $NUM_GPUS \
@@ -116,16 +113,17 @@ mpirun -np $NUM_GPUS \
   --lr_warmup $LR_WARMUP \
   --lr_decay $LR_DECAY \
   --lr_decay_style $LR_DECAY_STYLE \
-  --use_sequence_length_schedule \
   --weight_decay $WEIGHT_DECAY \
+  --use_sequence_length_schedule \
   --fsdp_activation_checkpointing \
   --seed $SEED \
-  --dataset "bf16-warmup-eval-test" \
+  --dataset "/bb/llm/gaf51275/llama/datasets/llama2-llm-jp-corpus/v1.0.2/tokenized_streaming/cc_wiki/" \
   --num_workers_dataloader $NUM_WORKERS_DATALOADER \
   --save_model \
   --save_optimizer \
-  --save_interval_iteration 10 \
+  --save_interval_iteration 500 \
   --save_checkpoint_path $CHECKPOINTS_PATH \
   --use_mpi \
   --use_fast_kernels \
+  --streaming_datasets_train_path /bb/llm/gaf51275/llama/datasets/llama2-llm-jp-corpus/v1.0.2/tokenized_streaming/cc_wiki/ \
   --wandb_name "llama2-13b_${NODE_TYPE}_${NHOSTS}_FSDP_${NUM_GPUS}_GLOBAL_BATCH_SIZE_${GLOBAL_BATCH_SIZE}"
