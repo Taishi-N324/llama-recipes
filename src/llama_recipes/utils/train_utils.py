@@ -164,7 +164,7 @@ def train(
                 )
                 if train_config.use_sequence_length_schedule:
                     # sequence length warmup
-                    current_seq_len: int = min(4096, max(64, 64 + 4 * wandb_iteration))
+                    current_seq_len: int = min(4096, max(64, 64 + 16 * wandb_iteration))
                     batch = {key: value[:, :current_seq_len] for key, value in batch.items()}
 
                 for key in batch.keys():
@@ -394,7 +394,7 @@ def train(
                         wandb_stats_streaming["streaming/sample_in_epoch"] = state_dict_streaming['sample_in_epoch']
                         wandb_stats_streaming["streaming/num_canonical_nodes"] = state_dict_streaming['num_canonical_nodes']
                         wandb_stats_streaming["streaming/shuffle_seed"] = state_dict_streaming['shuffle_seed']
-                        wandb.log(wandb_stats, step=wandb_iteration + 1)
+                        wandb.log(wandb_stats_streaming, step=wandb_iteration + 1)
 
                         # 最新情報を書き込む それ以外はwandbのログを元に置き換える
                         latest_streaming_datasets_checkpoint_path = os.path.join(train_config.save_checkpoint_path, "latest_streaming_info.json")
