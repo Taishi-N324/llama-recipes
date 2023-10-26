@@ -1,50 +1,41 @@
 #!/bin/bash
-#$ -l rt_AF=2
-#$ -l h_rt=3:00:00
-#$ -j y
-#$ -o outputs/7b/
-#$ -cwd
-
-# module load
-source /etc/profile.d/modules.sh
-module load cuda/11.8/11.8.0
-module load cudnn/8.9/8.9.2
-module load nccl/2.16/2.16.2-1
-module load hpcx/2.12
 
 # swich virtual env
-cd /bb/llm/gaf51275/llama/taishi-work-streaming/ABCI-llama-recipes
-source .env/bin/activate
+cd /home/taishi/llama-recipes
+source venv/bin/activate
+cd /home/taishi/ABCI-llama-recipes
 
 # distributed settings
-export MASTER_ADDR=$(/usr/sbin/ip a show dev bond0 | grep 'inet ' | awk '{ print $2 }' | cut -d "/" -f 1)
-export MASTER_PORT=$((10000 + ($JOB_ID % 50000)))
+export MASTER_ADDR=10.130.184.10
+export MASTER_PORT=12800
 
 echo "MASTER_ADDR=${MASTER_ADDR}"
 
 # hostfile
 
-if [[ "$SGE_RESOURCE_TYPE" == "rt_F" ]]; then
-  export NUM_GPU_PER_NODE=4
-  NODE_TYPE="v100"
-elif [[ "$SGE_RESOURCE_TYPE" == "rt_AF" ]]; then
-  export NUM_GPU_PER_NODE=8
-  NODE_TYPE="a100"
-else
-  echo "Unrecognized SGE_RESOURCE_TYPE: $SGE_RESOURCE_TYPE"
-fi
+# if [[ "$SGE_RESOURCE_TYPE" == "rt_F" ]]; then
+#   export NUM_GPU_PER_NODE=4
+#   NODE_TYPE="v100"
+# elif [[ "$SGE_RESOURCE_TYPE" == "rt_AF" ]]; then
+#   export NUM_GPU_PER_NODE=8
+NODE_TYPE="a100"
+export NUM_GPU_PER_NODE=8
+# else
+#   echo "Unrecognized SGE_RESOURCE_TYPE: $SGE_RESOURCE_TYPE"
+# fi
 
-NUM_NODES=$NHOSTS
-NUM_GPUS=$((${NUM_NODES} * ${NUM_GPU_PER_NODE}))
+# NUM_NODES=$NHOSTS
+# NUM_GPUS=$((${NUM_NODES} * ${NUM_GPU_PER_NODE}))
 
-mkdir -p ./hostfile
+# mkdir -p ./hostfile
 
-HOSTFILE_NAME=./hostfile/hostfile_${JOB_ID}
-while read -r line
-do
-  echo "${line} slots=${NUM_GPU_PER_NODE}"
-done < "$SGE_JOB_HOSTLIST" > "$HOSTFILE_NAME"
+# HOSTFILE_NAME=./hostfile/hostfile_${JOB_ID}
+# while read -r line
+# do
+#   echo "${line} slots=${NUM_GPU_PER_NODE}"
+# done < "$SGE_JOB_HOSTLIST" > "$HOSTFILE_NAME"
 
+HOSTFILE_NAME=/home/taishi/ABCI-llama-recipes/hostfile/4node
 
 # debugging flag
 export LOGLEVEL=INFO
@@ -55,9 +46,9 @@ export CUDA_LAUNCH_BLOCKING=0
 
 # training settings
 NUM_EPOCHS=1
-
+NUM_GPUS=8
 # batch size
-BATCH_SIZE=4
+BATCH_SIZE=8
 GLOBAL_BATCH_SIZE=1024
 GRADIENT_ACCUMULATION_STEPS=$((GLOBAL_BATCH_SIZE / (BATCH_SIZE * NUM_GPUS)))
 
@@ -81,15 +72,15 @@ SEED=42
 NUM_WORKERS_DATALOADER=2
 
 # checkpoint path
-CHECKPOINTS_PATH=/bb/llm/gaf51275/llama/checkpoints/llama-2-7b-gbs_${GLOBAL_BATCH_SIZE}-${NODE_TYPE}_${NHOSTS}
+CHECKPOINTS_PATH=/model/taishi/checkpoints/checkpoints/llama-2-7b-gbs_${GLOBAL_BATCH_SIZE}-${NODE_TYPE}_${NHOSTS}
 mkdir -p $CHECKPOINTS_PATH
 
-# hugginface setting
-export HF_HOME=/bb/llm/gaf51275/.cache/huggingface
+
 
 # checkpoint path
-CHECKPOINTS_PATH=/bb/llm/gaf51275/llama/taishi-work-streaming/ABCI-llama-recipes/scripts/abci/7b/llama-2-7b-gbs_1024
+CHECKPOINTS_PATH=/model/taishi/checkpoints/7b/llama-2-7b-gbs_1024_48k_merge_ja10_en90
 mkdir -p $CHECKPOINTS_PATH
+
 
 # run
 mpirun -np $NUM_GPUS \
@@ -106,8 +97,8 @@ mpirun -np $NUM_GPUS \
   --mixed_precision \
   --pure_bf16 \
   --num_epochs $NUM_EPOCHS \
-  --model_name /home/acf15834ji/.cache/huggingface/hub/models--meta-llama--Llama-2-7b-hf/snapshots/6fdf2e60f86ff2481f2241aaee459f85b5b0bbb9 \
-  --tokenizer_name /home/acf15834ji/.cache/huggingface/hub/models--meta-llama--Llama-2-7b-hf/snapshots/6fdf2e60f86ff2481f2241aaee459f85b5b0bbb9 \
+  --model_name  /home/taishi/models/llama2-7b-chat-merged-tokenizer-48k-hf/llama2-7b-chat-merged-tokenizer-48k-hf \
+  --tokenizer_name jalm-tokenizer-private/tokenizer/jalm_llama_clueweb_48k_aligned_8/merged_tokenizer_sp//jalm_llama.model  \
   --batch_size_training $BATCH_SIZE \
   --gradient_accumulation_steps $GRADIENT_ACCUMULATION_STEPS \
   --lr $LR \
@@ -118,14 +109,14 @@ mpirun -np $NUM_GPUS \
   --weight_decay $WEIGHT_DECAY \
   --fsdp_activation_checkpointing \
   --seed $SEED \
-  --dataset "ja_wikipedia_dataset" \
+  --dataset "/model/taishi/datasets/sp_48k/merge_ja10_en90/shuffle1/" \
   --num_workers_dataloader $NUM_WORKERS_DATALOADER \
   --save_model \
   --save_optimizer \
-  --save_interval_iteration 10 \
+  --save_interval_iteration 500 \
   --save_checkpoint_path $CHECKPOINTS_PATH \
-  --load_checkpoint_path $CHECKPOINTS_PATH \
   --use_mpi \
   --use_fast_kernels \
-  --use_sequence_length_schedule \
-  --wandb_name "llama2-7b_${NODE_TYPE}_${NHOSTS}_FSDP_${NUM_GPUS}_GLOBAL_BATCH_SIZE_${GLOBAL_BATCH_SIZE}"
+  --streaming_datasets_train_path  /model/taishi/datasets/sp_48k/merge_ja10_en90/shuffle1/ \
+  --wandb_name "llama2-7b_${NODE_TYPE}_${NHOSTS}_FSDP_${NUM_GPUS}_GLOBAL_BATCH_SIZE_${GLOBAL_BATCH_SIZE}" \
+  --estimated_total_iterations 17500
