@@ -274,7 +274,7 @@ def main(**kwargs) -> None:
         val_sampler = None
         if rank == 0:
             print("train_config.streaming_datasets_train_path",train_config.streaming_datasets_train_path)
-        dataset_train = StreamingDataset(local=train_config.streaming_datasets_train_path, split=None, shuffle=True)
+        dataset_train = StreamingDataset(local=train_config.streaming_datasets_train_path, split=None, shuffle=True, shuffle_seed=42)
         train_dataloader = StreamingDataLoader(
             dataset_train,
             batch_size=train_config.batch_size_training,
@@ -330,7 +330,7 @@ def main(**kwargs) -> None:
         #     * 100000  # type: ignore
         #     // (train_config.batch_size_training * world_size * train_config.gradient_accumulation_steps)
         # )
-        estimated_total_iterations = 36000
+        estimated_total_iterations = train_config.estimated_total_iterations
         lr_warmup_iterations: int = int(estimated_total_iterations * train_config.lr_warmup)
         lr_decay_iterations: int = int(estimated_total_iterations * train_config.lr_decay)
 
