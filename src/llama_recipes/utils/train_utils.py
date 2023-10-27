@@ -358,6 +358,13 @@ def train(
                     tflops: float = flops_per_iteration / (iteration_elapsed_time * (10**12))
                     wandb_stats["stats/tflops"] = tflops
 
+
+                    state_dict_streaming = train_dataloader.state_dict()
+                    wandb_stats["streaming/epoch"] = state_dict_streaming['epoch']
+                    wandb_stats["streaming/sample_in_epoch"] = state_dict_streaming['sample_in_epoch']
+                    wandb_stats["streaming/num_canonical_nodes"] = state_dict_streaming['num_canonical_nodes']
+                    wandb_stats["streaming/shuffle_seed"] = state_dict_streaming['shuffle_seed']
+
                     wandb.log(wandb_stats, step=wandb_iteration + 1)
 
                     print("------------------------------------------------------------------")
