@@ -48,7 +48,7 @@ class train_config:
     load_checkpoint_path: str = ""
     save_interval_iteration: int = 10
     use_fast_kernels: bool = True  # Enable using SDPA from PyTorch Accelerated Transformers, make use Flash Attention and Xformer memory-efficient kernels
-    use_mpi: bool = False
+    use_mpi: bool = True
     use_streaming_datasets: bool = False
     streaming_datasets_train_path: str = ""
     streaming_datasets_val_path: str = "/bb/llm/gaf51275/llama/taishi-work-streaming/ABCI-llama-recipes/tools/data_prep/samsum2/"

@@ -79,24 +79,24 @@ def main(**kwargs) -> None:
     local_rank: int = 0
     world_size: int = 1
 
-    # # Distributed args.
-    # if train_config.use_mpi:
-    #     global_rank = int(os.getenv("OMPI_COMM_WORLD_RANK", 0))
-    #     local_rank = int(os.getenv("OMPI_COMM_WORLD_LOCAL_RANK", 0))
-    #     world_size = int(os.getenv("OMPI_COMM_WORLD_SIZE", 1))
-    #     local_world_size = int(os.environ["OMPI_COMM_WORLD_LOCAL_SIZE"])
+    # Distributed args.
+    if train_config.use_mpi:
+        global_rank = int(os.getenv("OMPI_COMM_WORLD_RANK", 0))
+        local_rank = int(os.getenv("OMPI_COMM_WORLD_LOCAL_RANK", 0))
+        world_size = int(os.getenv("OMPI_COMM_WORLD_SIZE", 1))
+        local_world_size = int(os.environ["OMPI_COMM_WORLD_LOCAL_SIZE"])
 
-    #     os.environ["RANK"] = str(global_rank)
-    #     os.environ["LOCAL_RANK"] = str(local_rank)
-    #     os.environ["WORLD_SIZE"] = str(world_size)
-    #     os.environ["LOCAL_WORLD_SIZE"] = str(local_world_size)
+        os.environ["RANK"] = str(global_rank)
+        os.environ["LOCAL_RANK"] = str(local_rank)
+        os.environ["WORLD_SIZE"] = str(world_size)
+        os.environ["LOCAL_WORLD_SIZE"] = str(local_world_size)
 
-    #     env_vars = ["MASTER_ADDR", "MASTER_PORT", "RANK", "LOCAL_RANK", "WORLD_SIZE", "LOCAL_WORLD_SIZE"]
-    #     for var in env_vars:
-    #         if var in os.environ:
-    #             print(f"{var} is defined and its value is: {os.environ[var]}")
-    #         else:
-    #             print(f"{var} is not defined.")
+        env_vars = ["MASTER_ADDR", "MASTER_PORT", "RANK", "LOCAL_RANK", "WORLD_SIZE", "LOCAL_WORLD_SIZE"]
+        for var in env_vars:
+            if var in os.environ:
+                print(f"{var} is defined and its value is: {os.environ[var]}")
+            else:
+                print(f"{var} is not defined.")
     
     if train_config.enable_fsdp:
         setup()

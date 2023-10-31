@@ -1,12 +1,14 @@
 #!/bin/bash -x
+#SBATCH --account=cstdl
+#SBATCH --nodes=16
+#SBATCH --ntasks-per-node=4
+#SBATCH --gres=gpu:4
+#SBATCH --cpus-per-task=10
+#SBATCH --partition=booster
+#SBATCH --output=%j_0_log.out  # change this line to your output file 
+
 cd /p/home/jusers/nakamura2/juwels/nakamura2/ABCI-llama-recipes
-# source venv/bin/activate
 source /p/project/ccstdl/nakamura2/miniconda3/bin/activate /p/project/ccstdl/nakamura2/llama-recipe-torch2.1_cuda-11.8
-# ml GCC
-# ml OpenMPI
-# ml CUDA
-# ml cuDNN
-# ml NCCL
 
 # Network Configuration
 export NCCL_IB_TIMEOUT=50
@@ -33,7 +35,7 @@ master_addr="$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)i"
 export MASTER_ADDR=$master_addr
 export HOSTNAMES=`scontrol show hostnames "$SLURM_JOB_NODELIST"`
 export MASTER_PORT=12802
-export COUNT_NODE=`scontrol show hostnames "$SLURM_JOB_NODELIST" | wc -l`
+export COUNT_NODE=$SLURM_NNODES
 
 # Print System Information
 echo "GPUs available to job: $SLURM_JOB_GPUS"
@@ -42,16 +44,7 @@ echo "Total tasks: $SLURM_NTASKS"
 
 # training settings
 NUM_EPOCHS=50
-NUM_GPUS=4
-# batch size
-BATCH_SIZE=6
-GLOBAL_BATCH_SIZE=240
-GRADIENT_ACCUMULATION_STEPS=$((GLOBAL_BATCH_SIZE / (BATCH_SIZE * NUM_GPUS)))
 
-if (($GRADIENT_ACCUMULATION_STEPS < 1)); then
-  echo "Error: Gradient Accumulation Steps is less than 1. Exiting."
-  exit 1
-fi
 
 # optimizer
 LR=1e-4
@@ -74,13 +67,48 @@ NUM_WORKERS_DATALOADER=2
 CHECKPOINTS_PATH=/p/home/jusers/nakamura2/juwels/nakamura2/ABCI-llama-recipes/checkpoints/
 mkdir -p $CHECKPOINTS_PATH
 
+NUM_GPU_PER_NODE=4
 
-# run
-# srun -A cstdl --cpu-bind=v \
-#      python -u
+NUM_NODES=$NHOSTS
+NUM_GPUS=$((${SLURM_NNODES} * ${NUM_GPU_PER_NODE}))
 
-torchrun --nnodes 1 --nproc_per_node 4 \
-    examples/finetuning.py \
+
+# batch size
+BATCH_SIZE=8
+GLOBAL_BATCH_SIZE=2048
+GRADIENT_ACCUMULATION_STEPS=$((GLOBAL_BATCH_SIZE / (BATCH_SIZE * NUM_GPUS)))
+
+if (($GRADIENT_ACCUMULATION_STEPS < 1)); then
+  echo "Error: Gradient Accumulation Steps is less than 1. Exiting."
+  exit 1
+fi
+
+
+
+mkdir -p ./hostfile
+
+# HOSTFILE_NAME=./hostfile/hostfile_${SLURM_JOB_ID}
+# while read -r line
+# do
+#   echo "${line} slots=${NUM_GPU_PER_NODE}"
+# done < "$SLURM_JOB_NODELIST" > "$HOSTFILE_NAME"
+
+HOSTFILE_NAME=./hostfile/hostfile_${SLURM_JOB_ID}
+
+scontrol show hostnames $SLURM_JOB_NODELIST | while read -r line
+do
+  echo "${line} slots=${NUM_GPU_PER_NODE}"
+done > "$HOSTFILE_NAME"
+
+
+mpirun -np $NUM_GPUS \
+  --npernode $NUM_GPU_PER_NODE \
+  -hostfile $HOSTFILE_NAME \
+  -x MASTER_ADDR=$MASTER_ADDR \
+  -x MASTER_PORT=$MASTER_PORT \
+  -bind-to none -map-by slot \
+  -x PATH \
+  python examples/finetuning.py \
   --enable_fsdp \
   --low_cpu_fsdp \
   --peft_method None \
@@ -107,5 +135,8 @@ torchrun --nnodes 1 --nproc_per_node 4 \
   --save_checkpoint_path $CHECKPOINTS_PATH \
   --use_mpi \
   --use_fast_kernels \
-  --wandb_name "llama2-7b_${NODE_TYPE}_${NHOSTS}_FSDP_${NUM_GPUS}_GLOBAL_BATCH_SIZE_${GLOBAL_BATCH_SIZE}" \
+  --wandb_name "llama2-7b_${NODE_TYPE}_SLURM_NNODES_${SLURM_NNODES}_FSDP_NUM_GPUS_${NUM_GPUS}_GLOBAL_BATCH_SIZE_${GLOBAL_BATCH_SIZE}" \
   --estimated_total_iterations 17500
+done
+
+wait
