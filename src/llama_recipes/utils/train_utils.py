@@ -393,22 +393,22 @@ def train(
                     # 全プロセスがcheckpointを保存し終えるまで待つ
                     if train_config.enable_fsdp:
                         torch_distributed.barrier()
-                    if rank == 0:
+                    # if rank == 0:
                         # 念の為にstreamingがどこまでいったか保存
-                        wandb_stats_streaming: dict[str, Any] = {}
-                        state_dict_streaming = train_dataloader.state_dict()
-                        wandb_stats_streaming["streaming/epoch"] = state_dict_streaming['epoch']
-                        wandb_stats_streaming["streaming/sample_in_epoch"] = state_dict_streaming['sample_in_epoch']
-                        wandb_stats_streaming["streaming/num_canonical_nodes"] = state_dict_streaming['num_canonical_nodes']
-                        wandb_stats_streaming["streaming/shuffle_seed"] = state_dict_streaming['shuffle_seed']
-                        wandb.log(wandb_stats_streaming, step=wandb_iteration + 1)
+                        # wandb_stats_streaming: dict[str, Any] = {}
+                        # state_dict_streaming = train_dataloader.state_dict()
+                        # wandb_stats_streaming["streaming/epoch"] = state_dict_streaming['epoch']
+                        # wandb_stats_streaming["streaming/sample_in_epoch"] = state_dict_streaming['sample_in_epoch']
+                        # wandb_stats_streaming["streaming/num_canonical_nodes"] = state_dict_streaming['num_canonical_nodes']
+                        # wandb_stats_streaming["streaming/shuffle_seed"] = state_dict_streaming['shuffle_seed']
+                        # wandb.log(wandb_stats_streaming, step=wandb_iteration + 1)
 
-                        # 最新情報を書き込む それ以外はwandbのログを元に置き換える
-                        latest_streaming_datasets_checkpoint_path = os.path.join(train_config.save_checkpoint_path, "latest_streaming_info.json")
-                        with open(latest_streaming_datasets_checkpoint_path, "w") as file:
-                            json.dump(state_dict_streaming, file)
-                            print(f"state_dict_streaming info {state_dict_streaming} ")
-                            print(f"state_dict_streaming saved successfully {latest_streaming_datasets_checkpoint_path} ")
+                        # # 最新情報を書き込む それ以外はwandbのログを元に置き換える
+                        # latest_streaming_datasets_checkpoint_path = os.path.join(train_config.save_checkpoint_path, "latest_streaming_info.json")
+                        # with open(latest_streaming_datasets_checkpoint_path, "w") as file:
+                        #     json.dump(state_dict_streaming, file)
+                        #     print(f"state_dict_streaming info {state_dict_streaming} ")
+                        #     print(f"state_dict_streaming saved successfully {latest_streaming_datasets_checkpoint_path} ")
 
 
         epoch_end_time = time.perf_counter() - epoch_start_time
