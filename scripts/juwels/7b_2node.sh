@@ -1,10 +1,10 @@
 #!/bin/bash -x
 #SBATCH --account=cstdl
-#SBATCH --nodes=16
+#SBATCH --nodes=4
 #SBATCH --ntasks-per-node=4
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=10
-#SBATCH --partition=booster
+#SBATCH --partition=develbooster
 #SBATCH --output=%j_0_log.out  # change this line to your output file 
 
 cd /p/home/jusers/nakamura2/juwels/nakamura2/ABCI-llama-recipes

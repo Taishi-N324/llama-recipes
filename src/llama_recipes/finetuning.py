@@ -107,7 +107,6 @@ def main(**kwargs) -> None:
         print(rank)
         world_size = int(os.environ["WORLD_SIZE"])
         print(world_size)
-        os.environ["LOCAL_WORLD_SIZE"] = str(4)
 
     # wandb setting
     if train_config.wandb_name is not None and rank == 0:
@@ -124,6 +123,7 @@ def main(**kwargs) -> None:
             "project": "code-llama",
             "name": train_config.wandb_name,
             "config": wandb_configs,
+            "mode" : 'offline',
         }
         wandb.init(**wandb_setting)
 
