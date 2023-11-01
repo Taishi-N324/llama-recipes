@@ -5,7 +5,7 @@ sys.path.append("/p/project/ccstdl/nakamura2/ABCI-llama-recipes/src")
 
 import fire
 from llama_recipes.finetuning import main
-# import streaming
+import streaming
 
 # def clean_stale_memory():
 #     try:
@@ -13,6 +13,21 @@ from llama_recipes.finetuning import main
 #     except FileNotFoundError as e:
 #         print(f"Warning: {e}")
 
+def clean_stale_memory():
+    try:
+        streaming.base.util.clean_stale_shared_memory()
+    except FileNotFoundError as e:
+        print(f"Warning: {e}")
+    except FileExistsError as e:
+        print(f"Error: Conflicting file state detected. Details: {e}")
+    except PermissionError as e:
+        print(f"Error: Permission denied. Details: {e}")
+    except MemoryError as e:
+        print(f"Error: Memory error occurred. Details: {e}")
+    except Exception as e:
+        # Catch-all for other exceptions
+        print(f"Unexpected error occurred: {e}")
+
 if __name__ == "__main__":
-    # clean_stale_memory()
+    clean_stale_memory()
     fire.Fire(main)

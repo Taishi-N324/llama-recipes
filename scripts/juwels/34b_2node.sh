@@ -74,8 +74,8 @@ NUM_GPUS=$((${SLURM_NNODES} * ${NUM_GPU_PER_NODE}))
 
 
 # batch size
-BATCH_SIZE=8
-GLOBAL_BATCH_SIZE=4096
+BATCH_SIZE=2
+GLOBAL_BATCH_SIZE=1024
 GRADIENT_ACCUMULATION_STEPS=$((GLOBAL_BATCH_SIZE / (BATCH_SIZE * NUM_GPUS)))
 
 if (($GRADIENT_ACCUMULATION_STEPS < 1)); then
@@ -115,8 +115,8 @@ mpirun -np $NUM_GPUS \
   --mixed_precision \
   --pure_bf16 \
   --num_epochs $NUM_EPOCHS \
-  --model_name  /p/home/jusers/nakamura2/juwels/nakamura2/.cache/huggingface/hub/models--meta-llama--Llama-2-7b-hf/snapshots/6fdf2e60f86ff2481f2241aaee459f85b5b0bbb9 \
-  --tokenizer_name /p/home/jusers/nakamura2/juwels/nakamura2/.cache/huggingface/hub/models--meta-llama--Llama-2-7b-hf/snapshots/6fdf2e60f86ff2481f2241aaee459f85b5b0bbb9  \
+  --model_name  /p/home/jusers/nakamura2/juwels/.cache/huggingface/hub/models--codellama--CodeLlama-34b-hf/snapshots/fda69408949a7c6689a3cf7e93e632b8e70bb8ad \
+  --tokenizer_name /p/home/jusers/nakamura2/juwels/.cache/huggingface/hub/models--codellama--CodeLlama-34b-hf/snapshots/fda69408949a7c6689a3cf7e93e632b8e70bb8ad  \
   --batch_size_training $BATCH_SIZE \
   --gradient_accumulation_steps $GRADIENT_ACCUMULATION_STEPS \
   --lr $LR \

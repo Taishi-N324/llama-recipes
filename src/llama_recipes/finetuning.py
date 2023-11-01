@@ -13,7 +13,7 @@ from torch.distributed.fsdp.fully_sharded_data_parallel import CPUOffload  # typ
 import torch.optim as optim
 import wandb
 import typing
-import deepspeed  # noqa: F401
+# import deepspeed  # noqa: F401
 from peft import get_peft_model, prepare_model_for_int8_training  # type: ignore
 from pkg_resources import packaging  # type: ignore
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP  # type: ignore
@@ -25,7 +25,9 @@ from transformers import (
     LlamaForCausalLM,
     LlamaTokenizer,
     default_data_collator,
+    CodeLlamaTokenizer,
 )
+
 from transformers.models.llama.modeling_llama import LlamaDecoderLayer
 
 from llama_recipes.configs import fsdp_config, train_config
@@ -53,9 +55,9 @@ from llama_recipes.utils.sequence_length_warmup import (  # noqa: F401
     SequenceLengthWarmupDataset,  # noqa: F401
     CustomDistributedSampler,
 )
-# from streaming import StreamingDataset
-# from streaming import StreamingDataLoader
-# from llama_recipes.utils.streaming_dataset_utils import combined_collate_fn
+from streaming import StreamingDataset
+from streaming import StreamingDataLoader
+from llama_recipes.utils.streaming_dataset_utils import combined_collate_fn
 import json
 import sentencepiece as spm
 
@@ -193,7 +195,8 @@ def main(**kwargs) -> None:
 
     # Load the tokenizer ABCIのLLMでは、paddingはしません
     # hfならこれ
-    tokenizer = LlamaTokenizer.from_pretrained(train_config.tokenizer_name)
+    # tokenizer = LlamaTokenizer.from_pretrained(train_config.tokenizer_name)
+    tokenizer = CodeLlamaTokenizer.from_pretrained(train_config.tokenizer_name)
     # tokenizer = spm.SentencePieceProcessor()
     # tokenizer.Load(train_config.tokenizer_name)
 

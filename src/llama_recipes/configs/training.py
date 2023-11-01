@@ -49,7 +49,8 @@ class train_config:
     save_interval_iteration: int = 10
     use_fast_kernels: bool = True  # Enable using SDPA from PyTorch Accelerated Transformers, make use Flash Attention and Xformer memory-efficient kernels
     use_mpi: bool = True
-    use_streaming_datasets: bool = False
+    use_streaming_datasets: bool = True
     streaming_datasets_train_path: str = ""
-    streaming_datasets_val_path: str = "/bb/llm/gaf51275/llama/taishi-work-streaming/ABCI-llama-recipes/tools/data_prep/samsum2/"
+    streaming_datasets_val_path: str = "/p/home/jusers/nakamura2/juwels/nakamura2/ABCI-llama-recipes/sample_datasets2"
     wandb_name: Optional[str] = None
+    estimated_total_iterations: int = 17000
