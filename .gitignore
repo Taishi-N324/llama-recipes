@@ -173,3 +173,6 @@ cython_debug/
 .python-version
 tools/data_prep/process_log/
 tools/data_prep/example_data/
+
+# juwels
+*.out

@@ -60,6 +60,7 @@ from streaming import StreamingDataLoader
 from llama_recipes.utils.streaming_dataset_utils import combined_collate_fn
 import json
 import sentencepiece as spm
+from lion_pytorch import Lion
 
 def main(**kwargs) -> None:
     # logging 設定
@@ -195,10 +196,11 @@ def main(**kwargs) -> None:
 
     # Load the tokenizer ABCIのLLMでは、paddingはしません
     # hfならこれ
-    # tokenizer = LlamaTokenizer.from_pretrained(train_config.tokenizer_name)
-    tokenizer = CodeLlamaTokenizer.from_pretrained(train_config.tokenizer_name)
-    # tokenizer = spm.SentencePieceProcessor()
-    # tokenizer.Load(train_config.tokenizer_name)
+    if 'llama' in train_config.model_name:
+        if 'code' in train_config.model_name:
+            tokenizer = CodeLlamaTokenizer.from_pretrained(train_config.tokenizer_name)
+        else:
+            tokenizer = LlamaTokenizer.from_pretrained(train_config.tokenizer_name)
 
     if train_config.use_peft:
         print(f"Using PEFT method: {train_config.peft_method}", flush=True)
@@ -233,48 +235,6 @@ def main(**kwargs) -> None:
     elif not train_config.quantization and not train_config.enable_fsdp:
         model.to("cuda")  # type: ignore
 
-    if train_config.use_streaming_datasets:
-        pass
-    else:
-
-        dataset_config = generate_dataset_config(train_config, kwargs)
-
-        # Load and preprocess the dataset for training and validation
-        dataset_train = get_preprocessed_dataset(
-            tokenizer,
-            dataset_config,
-            split="train",
-        )
-
-        if not train_config.enable_fsdp or rank == 0:
-            print(f"--> Training Set Length = {len(dataset_train)}")  # type: ignore
-
-        dataset_val = get_preprocessed_dataset(
-            tokenizer,
-            dataset_config,
-            split="test",
-        )
-        if not train_config.enable_fsdp or rank == 0:
-            print(f"--> Validation Set Length = {len(dataset_val)}")  # type: ignore
-
-        """
-        estimated_total_iterations: 学習にかかる iteration数
-        lr_warmup_iterations: learning rateがwarmupしきるのにかかるiterations
-        lr_decay_iterations: learning rate が cosineで落ちきるのにかかるiterations
-        """
-        estimated_total_iterations: int = (
-            train_config.num_epochs
-            * len(dataset_train)  # type: ignore
-            // (train_config.batch_size_training * world_size * train_config.gradient_accumulation_steps)
-        )
-        lr_warmup_iterations: int = int(estimated_total_iterations * train_config.lr_warmup)
-        lr_decay_iterations: int = int(estimated_total_iterations * train_config.lr_decay)
-
-        dataset_length: int = len(dataset_train)  # type: ignore
-        if rank == 0:
-            print(f"dataset_train: {dataset_length}")  # type: ignore
-
-    # streaming-mosaicmlの組み込み
     if train_config.use_streaming_datasets:
         # UnboundLocalError 回避
         train_sampler = None
@@ -346,8 +306,44 @@ def main(**kwargs) -> None:
         if rank == 0:
             print(f"dataset_train: {dataset_length}")  # type: ignore
 
-    # デフォルト実装
     else:
+        dataset_config = generate_dataset_config(train_config, kwargs)
+
+        # Load and preprocess the dataset for training and validation
+        dataset_train = get_preprocessed_dataset(
+            tokenizer,
+            dataset_config,
+            split="train",
+        )
+
+        if not train_config.enable_fsdp or rank == 0:
+            print(f"--> Training Set Length = {len(dataset_train)}")  # type: ignore
+
+        dataset_val = get_preprocessed_dataset(
+            tokenizer,
+            dataset_config,
+            split="test",
+        )
+        if not train_config.enable_fsdp or rank == 0:
+            print(f"--> Validation Set Length = {len(dataset_val)}")  # type: ignore
+
+        """
+        estimated_total_iterations: 学習にかかる iteration数
+        lr_warmup_iterations: learning rateがwarmupしきるのにかかるiterations
+        lr_decay_iterations: learning rate が cosineで落ちきるのにかかるiterations
+        """
+        estimated_total_iterations: int = (
+            train_config.num_epochs
+            * len(dataset_train)  # type: ignore
+            // (train_config.batch_size_training * world_size * train_config.gradient_accumulation_steps)
+        )
+        lr_warmup_iterations: int = int(estimated_total_iterations * train_config.lr_warmup)
+        lr_decay_iterations: int = int(estimated_total_iterations * train_config.lr_decay)
+
+        dataset_length: int = len(dataset_train)  # type: ignore
+        if rank == 0:
+            print(f"dataset_train: {dataset_length}")  # type: ignore
+
         train_sampler = None
         val_sampler = None
         if train_config.enable_fsdp:
@@ -397,7 +393,14 @@ def main(**kwargs) -> None:
             )
 
     # Initialize the optimizer and learning rate scheduler
-    if fsdp_config.pure_bf16 and fsdp_config.optimizer == "anyprecision":
+    if fsdp_config.optimizer == "lion":
+        print("Using Lion optimizer")
+        optimizer = Lion(
+            model.parameters(),  # type: ignore
+            lr=train_config.lr,
+            weight_decay=train_config.weight_decay,
+        )
+    elif fsdp_config.pure_bf16 and fsdp_config.optimizer == "anyprecision":
         optimizer = AnyPrecisionAdamW(
             model.parameters(),  # type: ignore
             lr=train_config.lr,

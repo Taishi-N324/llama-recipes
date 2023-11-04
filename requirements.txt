@@ -21,3 +21,5 @@ sentencepiece
 
 # logging
 wandb
+
+lion_pytorch

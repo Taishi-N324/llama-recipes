@@ -1,13 +1,14 @@
 #!/bin/bash -x
 #SBATCH --account=cstdl
-#SBATCH --nodes=64
+#SBATCH --nodes=2
 #SBATCH --ntasks-per-node=4
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=10
-#SBATCH --partition=booster
+#SBATCH --partition=develbooster
+#SBATCH --time 00:20:00              # maximum execution time (HH:MM:SS)
 #SBATCH --output=%j_0_log.out  # change this line to your output file 
 
-cd /p/home/jusers/nakamura2/juwels/nakamura2/ABCI-llama-recipes
+cd /p/scratch/ccstdl/xu17/liangyu/ly_recipes
 source /p/project/ccstdl/nakamura2/miniconda3/bin/activate /p/project/ccstdl/nakamura2/llama-recipe-torch2.1_cuda-11.8
 
 # Network Configuration
@@ -64,8 +65,10 @@ NUM_WORKERS_DATALOADER=2
 
 
 # checkpoint path
-CHECKPOINTS_PATH=/p/home/jusers/nakamura2/juwels/nakamura2/ABCI-llama-recipes/checkpoints/
+CHECKPOINTS_PATH=/p/scratch/ccstdl/xu17/llama-recipes/checkpoints/
 mkdir -p $CHECKPOINTS_PATH
+
+MODEL_PATH=/p/scratch/ccstdl/transformers_cache/llama-2-7b-hf
 
 NUM_GPU_PER_NODE=4
 
@@ -74,8 +77,8 @@ NUM_GPUS=$((${SLURM_NNODES} * ${NUM_GPU_PER_NODE}))
 
 
 # batch size
-BATCH_SIZE=8
-GLOBAL_BATCH_SIZE=4096
+BATCH_SIZE=4
+GLOBAL_BATCH_SIZE=512
 GRADIENT_ACCUMULATION_STEPS=$((GLOBAL_BATCH_SIZE / (BATCH_SIZE * NUM_GPUS)))
 
 if (($GRADIENT_ACCUMULATION_STEPS < 1)); then
@@ -110,13 +113,12 @@ mpirun -np $NUM_GPUS \
   -x PATH \
   python examples/finetuning.py \
   --enable_fsdp \
-  --low_cpu_fsdp \
   --peft_method None \
   --mixed_precision \
   --pure_bf16 \
   --num_epochs $NUM_EPOCHS \
-  --model_name  /p/home/jusers/nakamura2/juwels/nakamura2/.cache/huggingface/hub/models--meta-llama--Llama-2-7b-hf/snapshots/6fdf2e60f86ff2481f2241aaee459f85b5b0bbb9 \
-  --tokenizer_name /p/home/jusers/nakamura2/juwels/nakamura2/.cache/huggingface/hub/models--meta-llama--Llama-2-7b-hf/snapshots/6fdf2e60f86ff2481f2241aaee459f85b5b0bbb9  \
+  --model_name $MODEL_PATH \
+  --tokenizer_name $MODEL_PATH \
   --batch_size_training $BATCH_SIZE \
   --gradient_accumulation_steps $GRADIENT_ACCUMULATION_STEPS \
   --lr $LR \
@@ -130,13 +132,15 @@ mpirun -np $NUM_GPUS \
   --dataset "samsum_dataset" \
   --num_workers_dataloader $NUM_WORKERS_DATALOADER \
   --save_model \
+  --optimizer lion \
   --save_optimizer \
   --save_interval_iteration 500 \
   --save_checkpoint_path $CHECKPOINTS_PATH \
   --use_mpi \
   --use_fast_kernels \
-  --streaming_datasets_train_path  /p/project/ccstdl/nakamura2/ABCI-llama-recipes/sample_datasets \
-  --wandb_name "llama2-7b_${NODE_TYPE}_SLURM_NNODES_${SLURM_NNODES}_FSDP_NUM_GPUS_${NUM_GPUS}_GLOBAL_BATCH_SIZE_${GLOBAL_BATCH_SIZE}" \
+  --streaming_datasets_train_path  /p/scratch/ccstdl/chen24/llm/ABCI-llama-recipes/sample_datasets \
+  --streaming_datasets_val_path  /p/scratch/ccstdl/chen24/llm/ABCI-llama-recipes/sample_datasets2 \
+  --wandb_name "llama2-7b_SLURM_NNODES_${SLURM_NNODES}_FSDP_NUM_GPUS_${NUM_GPUS}_GLOBAL_BATCH_SIZE_${GLOBAL_BATCH_SIZE}" \
   --estimated_total_iterations 17500
 done
 
