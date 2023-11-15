@@ -51,6 +51,6 @@ class train_config:
     use_mpi: bool = True
     use_streaming_datasets: bool = True
     streaming_datasets_train_path: str = ""
-    streaming_datasets_val_path: str = "/p/home/jusers/nakamura2/juwels/nakamura2/ABCI-llama-recipes/sample_datasets2"
+    streaming_datasets_val_path: str = ""
     wandb_name: Optional[str] = None
     estimated_total_iterations: int = 17000

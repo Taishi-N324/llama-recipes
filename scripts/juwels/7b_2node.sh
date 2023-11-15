@@ -65,10 +65,12 @@ NUM_WORKERS_DATALOADER=2
 
 
 # checkpoint path
-CHECKPOINTS_PATH=/p/scratch/ccstdl/xu17/llama-recipes/checkpoints/
+CHECKPOINTS_PATH=/p/scratch/ccstdl/xu17/liangyu/ly_recipes/checkpoints/
 mkdir -p $CHECKPOINTS_PATH
 
-MODEL_PATH=/p/scratch/ccstdl/transformers_cache/llama-2-7b-hf
+MODEL=tomato-1113
+# MODEL=llama-2-7b-hf
+MODEL_PATH=/p/scratch/ccstdl/transformers_cache/${MODEL}
 
 NUM_GPU_PER_NODE=4
 
@@ -77,7 +79,7 @@ NUM_GPUS=$((${SLURM_NNODES} * ${NUM_GPU_PER_NODE}))
 
 
 # batch size
-BATCH_SIZE=4
+BATCH_SIZE=1
 GLOBAL_BATCH_SIZE=512
 GRADIENT_ACCUMULATION_STEPS=$((GLOBAL_BATCH_SIZE / (BATCH_SIZE * NUM_GPUS)))
 
@@ -138,10 +140,11 @@ mpirun -np $NUM_GPUS \
   --save_checkpoint_path $CHECKPOINTS_PATH \
   --use_mpi \
   --use_fast_kernels \
-  --streaming_datasets_train_path  /p/scratch/ccstdl/chen24/llm/ABCI-llama-recipes/sample_datasets \
+  --streaming_datasets_train_path  /p/scratch/ccstdl/xu17/liangyu/m3it_mds_train \
   --streaming_datasets_val_path  /p/scratch/ccstdl/chen24/llm/ABCI-llama-recipes/sample_datasets2 \
   --wandb_name "llama2-7b_SLURM_NNODES_${SLURM_NNODES}_FSDP_NUM_GPUS_${NUM_GPUS}_GLOBAL_BATCH_SIZE_${GLOBAL_BATCH_SIZE}" \
-  --estimated_total_iterations 17500
+  --estimated_total_iterations 16384 \
+  --sequence_length 
 done
 
 wait

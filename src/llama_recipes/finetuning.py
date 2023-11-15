@@ -26,9 +26,14 @@ from transformers import (
     LlamaTokenizer,
     default_data_collator,
     CodeLlamaTokenizer,
+    FuyuConfig,
+    FuyuForCausalLM,
+    TomatoConfig,
+    TomatoForCausalLM,
 )
 
 from transformers.models.llama.modeling_llama import LlamaDecoderLayer
+from transformers.models.persimmon.modeling_persimmon import PersimmonDecoderLayer
 
 from llama_recipes.configs import fsdp_config, train_config
 from llama_recipes.policies import AnyPrecisionAdamW, apply_fsdp_checkpointing
@@ -57,7 +62,7 @@ from llama_recipes.utils.sequence_length_warmup import (  # noqa: F401
 )
 from streaming import StreamingDataset
 from streaming import StreamingDataLoader
-from llama_recipes.utils.streaming_dataset_utils import combined_collate_fn
+from llama_recipes.utils.streaming_dataset_utils import combined_collate_fn, fuyu_collate_fn
 import json
 import sentencepiece as spm
 from lion_pytorch import Lion
@@ -136,6 +141,18 @@ def main(**kwargs) -> None:
         setup_environ_flags(rank)  # type: ignore
 
     # Load the pre-trained model and setup its configuration
+    if 'llama' in train_config.model_name.lower():
+        model_class = LlamaForCausalLM
+        config_class = LlamaConfig
+    elif 'fuyu' in train_config.model_name.lower():
+        model_class = FuyuForCausalLM
+        config_class = FuyuConfig  
+    elif 'tomato' in train_config.model_name.lower():
+        model_class = TomatoForCausalLM
+        config_class = TomatoConfig
+    else:
+        raise NotImplementedError("Model for the given model name is not implemented.")
+
     use_cache = False if train_config.enable_fsdp else None
     if train_config.enable_fsdp and train_config.low_cpu_fsdp:
         """
@@ -152,20 +169,20 @@ def main(**kwargs) -> None:
                 "please install latest nightly."
             )
         if rank == 0:
-            model = LlamaForCausalLM.from_pretrained(
+            model = model_class.from_pretrained(
                 train_config.model_name,
                 load_in_8bit=True if train_config.quantization else None,
                 device_map="auto" if train_config.quantization else None,
                 use_cache=use_cache,
+                torch_dtype=torch.bfloat16,
             )
         else:
-            llama_config = LlamaConfig.from_pretrained(train_config.model_name)
-            llama_config.use_cache = use_cache
+            model_config = config_class.from_pretrained(train_config.model_name)
+            model_config.use_cache = use_cache
             with torch.device("meta"):
-                model = LlamaForCausalLM(llama_config)
-
+                model = model_class(model_config)
     else:
-        model = LlamaForCausalLM.from_pretrained(
+        model = model_class.from_pretrained(
             train_config.model_name,
             load_in_8bit=True if train_config.quantization else None,
             device_map="auto" if train_config.quantization else None,
@@ -180,10 +197,10 @@ def main(**kwargs) -> None:
         """
         try:
             from optimum.bettertransformer import BetterTransformer
-
+            model.config.model_type = 'llama'
             model = BetterTransformer.transform(model)  # type: ignore
-        except ImportError:
-            print("Module 'optimum' not found. Please install 'optimum' it before proceeding.")
+        except Exception as e:
+            print(e)
     print_model_size(model, train_config, rank if train_config.enable_fsdp else 0)  # type: ignore
 
     # Prepare the model for int8 training if quantization is enabled
@@ -193,14 +210,14 @@ def main(**kwargs) -> None:
     # Convert the model to bfloat16 if fsdp and pure_bf16 is enabled
     if train_config.enable_fsdp and fsdp_config.pure_bf16:
         model.to(torch.bfloat16)  # type: ignore
-
+    
     # Load the tokenizer ABCIのLLMでは、paddingはしません
     # hfならこれ
     if 'llama' in train_config.model_name:
         if 'code' in train_config.model_name:
-            tokenizer = CodeLlamaTokenizer.from_pretrained(train_config.tokenizer_name)
+            tokenizer = CodeLlamaTokenizer.from_pretrained(train_config.tokenizer_name, padding=True)
         else:
-            tokenizer = LlamaTokenizer.from_pretrained(train_config.tokenizer_name)
+            tokenizer = LlamaTokenizer.from_pretrained(train_config.tokenizer_name, padding=True)
 
     if train_config.use_peft:
         print(f"Using PEFT method: {train_config.peft_method}", flush=True)
@@ -215,7 +232,8 @@ def main(**kwargs) -> None:
             freeze_transformer_layers(model=model, num_layer=train_config.num_freeze_layers)
 
         mixed_precision_policy, wrapping_policy = get_policies(fsdp_config, rank)
-        my_auto_wrapping_policy = fsdp_auto_wrap_policy(model, LlamaDecoderLayer)
+        decoder_layer = PersimmonDecoderLayer if 'fuyu' in train_config.model_name.lower() else LlamaDecoderLayer
+        my_auto_wrapping_policy = fsdp_auto_wrap_policy(model, decoder_layer)
 
         model = FSDP(
             model,  # type: ignore
@@ -247,7 +265,7 @@ def main(**kwargs) -> None:
             batch_size=train_config.batch_size_training,
             num_workers=train_config.num_workers_dataloader,
             pin_memory=True,
-            collate_fn=lambda b: combined_collate_fn(b, max_seq_len=train_config.sequence_length),
+            collate_fn=lambda b: fuyu_collate_fn(b),
         )
 
         # 1. Check if the path is None
@@ -288,7 +306,7 @@ def main(**kwargs) -> None:
         )
         if rank == 0:
             print("train_config.num_epochs",train_config.num_epochs)
-            print("len(train_dataloader)",len(dataset_train))
+            print("len(dataset_train)",len(dataset_train))
             print("train_config.batch_size_training",train_config.batch_size_training)
             print("train_config.gradient_accumulation_steps",train_config.gradient_accumulation_steps)
             print("world_size",world_size)
@@ -301,8 +319,7 @@ def main(**kwargs) -> None:
         lr_warmup_iterations: int = int(estimated_total_iterations * train_config.lr_warmup)
         lr_decay_iterations: int = int(estimated_total_iterations * train_config.lr_decay)
 
-        dataset_length: int = 36463349  # type: ignore
-
+        dataset_length: int = len(dataset_train)
         if rank == 0:
             print(f"dataset_train: {dataset_length}")  # type: ignore
 
@@ -394,7 +411,6 @@ def main(**kwargs) -> None:
 
     # Initialize the optimizer and learning rate scheduler
     if fsdp_config.optimizer == "lion":
-        print("Using Lion optimizer")
         optimizer = Lion(
             model.parameters(),  # type: ignore
             lr=train_config.lr,
@@ -450,7 +466,6 @@ def main(**kwargs) -> None:
         train_dataloader=train_dataloader,
         eval_dataloader=eval_dataloader,
         sampler=train_sampler,  # type: ignore
-        tokenizer=tokenizer,
         optimizer=optimizer,  # type: ignore
         lr_scheduler=scheduler,
         gradient_accumulation_steps=train_config.gradient_accumulation_steps,

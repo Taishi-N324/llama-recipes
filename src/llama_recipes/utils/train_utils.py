@@ -47,7 +47,6 @@ def train(
     train_dataloader: DataLoader,
     eval_dataloader: Optional[DataLoader],
     sampler: SequenceLengthWarmupDistributedSampler | DistributedSampler,
-    tokenizer,
     optimizer,
     lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
     gradient_accumulation_steps: int,
@@ -71,7 +70,6 @@ def train(
         local_rank: The rank of the current node in a distributed setting
         train_config: The training configuration
         eval_dataloader: The dataloader containing the eval data
-        tokenizer: tokenizer used in the eval for decoding the predictions
 
     Returns: results dictionary containing average training and validation perplexity and loss
     """
@@ -167,11 +165,14 @@ def train(
                     current_seq_len: int = min(4096, max(64, 64 + 16 * wandb_iteration))
                     batch = {key: value[:, :current_seq_len] for key, value in batch.items()}
 
+                if not train_config.enable_fsdp:
+                    local_rank = "cuda:0"
+
                 for key in batch.keys():
-                    if train_config.enable_fsdp:
-                        batch[key] = batch[key].to(local_rank)
+                    if isinstance(batch[key], list):
+                        batch[key] = [x.to(local_rank) for x in batch[key]]
                     else:
-                        batch[key] = batch[key].to("cuda:0")
+                        batch[key] = batch[key].to(local_rank)
 
                 with autocast():
                     loss = model(**batch).loss
