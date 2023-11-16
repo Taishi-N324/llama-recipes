@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=10
 #SBATCH --partition=develbooster
-#SBATCH --time 00:20:00              # maximum execution time (HH:MM:SS)
+#SBATCH --time 2:00:00              # maximum execution time (HH:MM:SS)
 #SBATCH --output=%j_0_log.out  # change this line to your output file 
 
 cd /p/scratch/ccstdl/xu17/liangyu/ly_recipes
@@ -115,7 +115,8 @@ mpirun -np $NUM_GPUS \
   -x PATH \
   python examples/finetuning.py \
   --enable_fsdp \
-  --peft_method None \
+  --use_peft True \
+  --peft_method lora \
   --mixed_precision \
   --pure_bf16 \
   --num_epochs $NUM_EPOCHS \
