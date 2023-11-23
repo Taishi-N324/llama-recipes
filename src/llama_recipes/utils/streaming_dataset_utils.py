@@ -43,10 +43,22 @@ def convert_b64_image(base64_list):
         images.append(image)
     return images
 
+def convert_bytes_image(byte_list):
+    images = []
+    for b in byte_list:
+        # Decode bytes and open image
+        image = Image.open(BytesIO(b))
+        # Convert to 'RGB' if not already 3 channels
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        images.append(image)
+    return images
+
 def fuyu_collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
     # convert list of dict to dict of list
+    assert len(batch) == 1, f"len(batch) = {len(batch)}??? Not supported by current dataloader."
     batch = {k: [d[k] for d in batch] for k in batch[0]}
-    result = processor(text=batch['text'], images=convert_b64_image(batch['image_base64_str']), return_tensors="pt", padding='max_length', truncation=True, max_length=15000)
+    result = processor(text=batch['text'], images=[convert_bytes_image(image_list) for image_list in batch['images']], return_tensors="pt", truncation=True) # [[1]], 
     for key, value in result.items():
         print(f"Key: {key}")
         print(f"Content: {value}")

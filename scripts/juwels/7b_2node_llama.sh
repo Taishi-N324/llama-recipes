@@ -68,8 +68,9 @@ NUM_WORKERS_DATALOADER=2
 CHECKPOINTS_PATH=/p/scratch/ccstdl/xu17/liangyu/ly_recipes/checkpoints/
 mkdir -p $CHECKPOINTS_PATH
 
-MODEL=tomato-1113
+# MODEL=tomato-1113
 # MODEL=llama-2-7b-hf
+MODEL=deepseek-coder-6.7b-instruct-llama
 MODEL_PATH=/p/scratch/ccstdl/transformers_cache/${MODEL}
 
 NUM_GPU_PER_NODE=4
@@ -141,7 +142,7 @@ mpirun -np $NUM_GPUS \
   --save_checkpoint_path $CHECKPOINTS_PATH \
   --use_mpi \
   --use_fast_kernels \
-  --streaming_datasets_train_path  /p/scratch/ccstdl/xu17/liangyu/pop_data_10 \
+  --streaming_datasets_train_path  /p/scratch/ccstdl/xu17/liangyu/pop_data \
   --streaming_datasets_val_path  /p/scratch/ccstdl/chen24/llm/ABCI-llama-recipes/sample_datasets2 \
   --wandb_name "llama2-7b_SLURM_NNODES_${SLURM_NNODES}_FSDP_NUM_GPUS_${NUM_GPUS}_GLOBAL_BATCH_SIZE_${GLOBAL_BATCH_SIZE}" \
   --estimated_total_iterations 16384 \

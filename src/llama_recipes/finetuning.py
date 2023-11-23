@@ -197,8 +197,10 @@ def main(**kwargs) -> None:
         """
         try:
             from optimum.bettertransformer import BetterTransformer
-            model.config.model_type = 'llama'
-            model = BetterTransformer.transform(model)  # type: ignore
+            if 'tomato' in train_config.model_name.lower():
+                model.language_model = BetterTransformer.transform(model.language_model)
+            else:
+                model = BetterTransformer.transform(model)  # type: ignore
         except Exception as e:
             print(e)
     print_model_size(model, train_config, rank if train_config.enable_fsdp else 0)  # type: ignore
@@ -213,11 +215,11 @@ def main(**kwargs) -> None:
     
     # Load the tokenizer ABCIのLLMでは、paddingはしません
     # hfならこれ
-    if 'llama' in train_config.model_name:
-        if 'code' in train_config.model_name:
-            tokenizer = CodeLlamaTokenizer.from_pretrained(train_config.tokenizer_name, padding=True)
-        else:
-            tokenizer = LlamaTokenizer.from_pretrained(train_config.tokenizer_name, padding=True)
+    # if 'llama' in train_config.model_name:
+    #     if 'code' in train_config.model_name:
+    #         tokenizer = CodeLlamaTokenizer.from_pretrained(train_config.tokenizer_name, padding=True)
+    #     else:
+    #         tokenizer = LlamaTokenizer.from_pretrained(train_config.tokenizer_name, padding=True)
 
     if train_config.use_peft:
         print(f"Using PEFT method: {train_config.peft_method}", flush=True)

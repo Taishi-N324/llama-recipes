@@ -3,6 +3,7 @@
 
 import os
 import time
+import gc
 import yaml
 from pathlib import Path
 from pkg_resources import packaging  # type: ignore
@@ -169,6 +170,8 @@ def train(
                     local_rank = "cuda:0"
 
                 for key in batch.keys():
+                    if key == 'image_patches_indices':
+                        continue
                     if isinstance(batch[key], list):
                         batch[key] = [x.to(local_rank) for x in batch[key]]
                     else:
@@ -347,6 +350,10 @@ def train(
                         #     json.dump(state_dict_streaming, file)
                         #     print(f"state_dict_streaming info {state_dict_streaming} ")
                         #     print(f"state_dict_streaming saved successfully {latest_streaming_datasets_checkpoint_path} ")
+                        
+                loss = None
+                gc.collect()
+                torch.cuda.empty_cache()
 
 
         epoch_end_time = time.perf_counter() - epoch_start_time
