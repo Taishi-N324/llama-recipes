@@ -65,7 +65,6 @@ from streaming import StreamingDataLoader
 from llama_recipes.utils.streaming_dataset_utils import combined_collate_fn, fuyu_collate_fn
 import json
 import sentencepiece as spm
-from lion_pytorch import Lion
 
 def main(**kwargs) -> None:
     # logging 設定
@@ -413,6 +412,7 @@ def main(**kwargs) -> None:
 
     # Initialize the optimizer and learning rate scheduler
     if fsdp_config.optimizer == "lion":
+        from lion_pytorch import Lion
         optimizer = Lion(
             model.parameters(),  # type: ignore
             lr=train_config.lr,

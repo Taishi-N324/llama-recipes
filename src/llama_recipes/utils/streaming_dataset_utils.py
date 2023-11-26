@@ -59,12 +59,5 @@ def fuyu_collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
     assert len(batch) == 1, f"len(batch) = {len(batch)}??? Not supported by current dataloader."
     batch = {k: [d[k] for d in batch] for k in batch[0]}
     result = processor(text=batch['text'], images=[convert_bytes_image(image_list) for image_list in batch['images']], return_tensors="pt", truncation=True) # [[1]], 
-    for key, value in result.items():
-        print(f"Key: {key}")
-        print(f"Content: {value}")
-        try:
-            print(f"Shape: {value.shape}")
-        except:
-            print("List")
 
     return result

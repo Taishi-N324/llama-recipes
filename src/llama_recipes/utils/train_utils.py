@@ -159,7 +159,7 @@ def train(
             )
             for step, batch in enumerate(train_dataloader, start=next_step):
                 wandb_iteration = (
-                    epoch * len(train_dataloader) + step // gradient_accumulation_steps
+                    (epoch * len(train_dataloader) + step) // gradient_accumulation_steps
                 )
                 if train_config.use_sequence_length_schedule:
                     # sequence length warmup

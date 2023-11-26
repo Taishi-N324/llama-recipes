@@ -1,11 +1,11 @@
 #!/bin/bash -x
 #SBATCH --account=cstdl
-#SBATCH --nodes=2
+#SBATCH --nodes=32
 #SBATCH --ntasks-per-node=4
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=10
-#SBATCH --partition=develbooster
-#SBATCH --time 2:00:00              # maximum execution time (HH:MM:SS)
+#SBATCH --partition=booster
+#SBATCH --time 6:00:00              # maximum execution time (HH:MM:SS)
 #SBATCH --output=%j_0_log.out  # change this line to your output file 
 
 cd /p/scratch/ccstdl/xu17/liangyu/ly_recipes
@@ -21,6 +21,8 @@ export NCCL_ASYNC_ERROR_HANDLING=1
 echo $SLURM_JOB_GPUS
 echo $SLURM_NTASKS
 echo $SLURM_NODELIST
+
+WANDB_RUN_ID=$SLURM_JOB_ID
 
 # Convert SLURM_JOB_GPUS to an array
 IFS=',' read -ra GPU_ARRAY <<< "$SLURM_JOB_GPUS"
@@ -48,8 +50,8 @@ NUM_EPOCHS=50
 
 
 # optimizer
-LR=1e-4
-LR_MIN=1e-5
+LR=3e-4 # follow Mayank
+LR_MIN=3e-5 # follow Mayank
 LR_DECAY=0.80
 LR_WARMUP=0.05
 LR_DECAY_STYLE="cosine"
@@ -79,7 +81,7 @@ NUM_GPUS=$((${SLURM_NNODES} * ${NUM_GPU_PER_NODE}))
 
 
 # batch size
-BATCH_SIZE=1
+BATCH_SIZE=2
 GLOBAL_BATCH_SIZE=512
 GRADIENT_ACCUMULATION_STEPS=$((GLOBAL_BATCH_SIZE / (BATCH_SIZE * NUM_GPUS)))
 
@@ -135,7 +137,6 @@ mpirun -np $NUM_GPUS \
   --dataset "samsum_dataset" \
   --num_workers_dataloader $NUM_WORKERS_DATALOADER \
   --save_model \
-  --optimizer lion \
   --save_optimizer \
   --save_interval_iteration 500 \
   --save_checkpoint_path $CHECKPOINTS_PATH \
@@ -144,7 +145,7 @@ mpirun -np $NUM_GPUS \
   --streaming_datasets_train_path  /p/scratch/ccstdl/xu17/liangyu/pop_data_10 \
   --streaming_datasets_val_path  /p/scratch/ccstdl/chen24/llm/ABCI-llama-recipes/sample_datasets2 \
   --wandb_name "llama2-7b_SLURM_NNODES_${SLURM_NNODES}_FSDP_NUM_GPUS_${NUM_GPUS}_GLOBAL_BATCH_SIZE_${GLOBAL_BATCH_SIZE}" \
-  --estimated_total_iterations 16384 \
+  --estimated_total_iterations 1000 \
   --sequence_length 
 done
 
