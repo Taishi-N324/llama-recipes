@@ -1,12 +1,17 @@
 import sys
 import argparse
-sys.path.append("/bb/llm/gaf51275/llama/taishi-work-streaming/ABCI-llama-recipes/src/")
+sys.path.append("/p/scratch/ccstdl/xu17/liangyu/ly_recipes/src/")
 
-from transformers import (  # noqa: F401
+from transformers import (
     LlamaConfig,
     LlamaForCausalLM,
     LlamaTokenizer,
     default_data_collator,
+    CodeLlamaTokenizer,
+    FuyuConfig,
+    FuyuForCausalLM,
+    TomatoConfig,
+    TomatoForCausalLM,
 )
 from torch.distributed._shard.checkpoint import FileSystemReader
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP  # type: ignore
@@ -20,6 +25,7 @@ import os
 import torch.distributed as torch_distributed
 from llama_recipes.utils import fsdp_auto_wrap_policy
 from transformers.models.llama.modeling_llama import LlamaDecoderLayer
+from transformers.models.persimmon.modeling_persimmon import PersimmonDecoderLayer
 from llama_recipes.utils.train_utils import clear_gpu_cache
 
 
@@ -44,24 +50,37 @@ def main(args) -> None:
     # model definition
     if torch_distributed.get_rank() == 0:
         print("model loading start", flush=True)
+    
+    if 'llama' == args.model_name:
+        model_class = LlamaForCausalLM
+        config_class = LlamaConfig
+    elif 'fuyu' == args.model_name:
+        model_class = FuyuForCausalLM
+        config_class = FuyuConfig  
+    elif 'tomato' == args.model_name:
+        model_class = TomatoForCausalLM
+        config_class = TomatoConfig
+    else:
+        raise NotImplementedError(f"{model_name} is currently not supported.")
+
 
     if torch_distributed.get_rank() == 0:
-        model = LlamaForCausalLM.from_pretrained(
-            args.llama_pretrained_path,
+        model = model_class.from_pretrained(
+            args.pretrained_path,
             load_in_8bit=None,
             device_map=None,
             use_cache=None,
         )
     else:
-        llama_config = LlamaConfig.from_pretrained(args.llama_pretrained_path)
-        llama_config.use_cache = False
+        model_config = config_class.from_pretrained(args.pretrained_path)
+        model_config.use_cache = False
         with torch.device("meta"):
-            model = LlamaForCausalLM(llama_config)
+            model = model_class(model_config)
 
     if torch_distributed.get_rank() == 0:
         print("model setup", flush=True)
-
-    my_auto_wrapping_policy = fsdp_auto_wrap_policy(model, LlamaDecoderLayer)
+    decoder_layer = PersimmonDecoderLayer if 'fuyu' in args.model_name else LlamaDecoderLayer
+    my_auto_wrapping_policy = fsdp_auto_wrap_policy(model, decoder_layer)
 
     fsdp_model = FSDP(
         module=model,  # type: ignore
@@ -98,8 +117,8 @@ def main(args) -> None:
     print("get_model_state_dict : rank = ", torch_distributed.get_rank(), flush=True)
 
     if torch_distributed.get_rank() == 0:
-        hf_model = LlamaForCausalLM.from_pretrained(
-            args.llama_pretrained_path,
+        hf_model = model_class.from_pretrained(
+            args.pretrained_path,
             torch_dtype=torch.bfloat16,
         )
         # convert to hf checkpoint
@@ -129,7 +148,8 @@ def get_model_state_dict(model: FSDP) -> dict[str, torch.Tensor]:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Script parameters.")
-    parser.add_argument("--llama_pretrained_path", type=str, required=True, help="Path to pretrained Llama.")
+    parser.add_argument("--pretrained_path", type=str, required=True, help="Path to pretrained Llama.")
+    parser.add_argument("--model_name", type=str, required=True, help="Model Type")
     parser.add_argument("--checkpont_iter_path", type=str, required=True, help="Path for FileSystemReader.")
     parser.add_argument("--hf_save_path", type=str, required=True, help="Path to save hf_model.")
 

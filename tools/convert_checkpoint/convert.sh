@@ -1,45 +1,65 @@
-#!/bin/bash
-#$ -l rt_AF=1
-#$ -l h_rt=00:30:00
-#$ -j y
-#$ -o outputs/
-#$ -cwd
+#!/bin/bash -x
+#SBATCH --account=cstdl
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=4
+#SBATCH --gres=gpu:4
+#SBATCH --cpus-per-task=10
+#SBATCH --partition=develbooster
+#SBATCH --time 2:00:00              # maximum execution time (HH:MM:SS)
+#SBATCH --output=%j_0_log.out  # change this line to your output file 
 set -e
 
-# module load
-source /etc/profile.d/modules.sh
-module load cuda/11.8/11.8.0
-module load cudnn/8.9/8.9.2
-module load nccl/2.16/2.16.2-1
-module load hpcx/2.12
+cd /p/scratch/ccstdl/xu17/liangyu/ly_recipes
+source /p/project/ccstdl/nakamura2/miniconda3/bin/activate /p/project/ccstdl/nakamura2/llama-recipe-torch2.1_cuda-11.8
 
-# swich virtual env
-cd /bb/llm/gaf51275/llama/taishi-work-streaming/ABCI-llama-recipes/
-source .env/bin/activate
+# Network Configuration
+export NCCL_IB_TIMEOUT=50
+export UCX_RC_TIMEOUT=4s
+export NCCL_IB_RETRY_CNT=10
+export CUDA_VISIBLE_DEVICES=0,1,2,3
+export NCCL_ASYNC_ERROR_HANDLING=1
 
-# distributed settings
-export MASTER_ADDR=$(/usr/sbin/ip a show dev bond0 | grep 'inet ' | awk '{ print $2 }' | cut -d "/" -f 1)
-export MASTER_PORT=$((10000 + ($JOB_ID % 50000)))
+echo $SLURM_JOB_GPUS
+echo $SLURM_NTASKS
+echo $SLURM_NODELIST
 
-echo "MASTER_ADDR=${MASTER_ADDR}"
+export WANDB_RUN_ID=$SLURM_JOB_ID
 
-if [[ "$SGE_RESOURCE_TYPE" == "rt_F" ]]; then
-  export NUM_GPU_PER_NODE=4
-  NODE_TYPE="v100"
-elif [[ "$SGE_RESOURCE_TYPE" == "rt_AF" ]]; then
-  export NUM_GPU_PER_NODE=8
-  NODE_TYPE="a100"
-else
-  echo "Unrecognized SGE_RESOURCE_TYPE: $SGE_RESOURCE_TYPE"
-fi
+# Convert SLURM_JOB_GPUS to an array
+IFS=',' read -ra GPU_ARRAY <<< "$SLURM_JOB_GPUS"
 
+# Get the number of GPUs from the length of the array
+NUM_GPUS=${#GPU_ARRAY[@]}
+
+export TOTAL_GPUS=$(($NUM_GPUS * $SLURM_NTASKS))
+echo $TOTAL_GPUS
+
+master_addr="$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)i"
+
+export MASTER_ADDR=$master_addr
+export HOSTNAMES=`scontrol show hostnames "$SLURM_JOB_NODELIST"`
+export MASTER_PORT=12802
+export COUNT_NODE=$SLURM_NNODES
+
+# Print System Information
+echo "GPUs available to job: $SLURM_JOB_GPUS"
+echo "Total tasks: $SLURM_NTASKS"
+
+NUM_GPU_PER_NODE=4
 NUM_NODES=$NHOSTS
 NUM_GPUS=$((${NUM_NODES} * ${NUM_GPU_PER_NODE}))
 
-LLAMA_PRETRAINED_PATH=$1
-CHECKPONT_ITER_PATH=$2
-HF_SAVE_PATH=$3
-TOKENIZER_PATH=$4
+# PRETRAINED_PATH=$1
+# CHECKPONT_ITER_PATH=$2
+# HF_SAVE_PATH=$3
+# TOKENIZER_PATH=$4
+
+
+PRETRAINED_PATH=/p/scratch/ccstdl/transformers_cache/tomato-1113
+MODEL_NAME=tomato
+CHECKPONT_ITER_PATH=/p/scratch/ccstdl/xu17/liangyu/ly_recipes/checkpoints/iter_0000500
+HF_SAVE_PATH=/p/scratch/ccstdl/xu17/liangyu/ly_recipes/checkpoints_hf/iter_0000500
+
 
 mpirun -np $NUM_GPUS \
   --npernode $NUM_GPU_PER_NODE \
@@ -48,8 +68,7 @@ mpirun -np $NUM_GPUS \
   -bind-to none -map-by slot \
   -x PATH \
   python tools/convert_checkpoint/convert.py \
-  --llama_pretrained_path $LLAMA_PRETRAINED_PATH \
+  --pretrained_path $PRETRAINED_PATH \
+  --model_name $MODEL_NAME \
   --checkpont_iter_path $CHECKPONT_ITER_PATH \
   --hf_save_path $HF_SAVE_PATH
-
-cp -r $TOKENIZER_PATH/* $HF_SAVE_PATH
