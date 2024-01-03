@@ -26,9 +26,15 @@ from transformers import (
     LlamaTokenizer,
     default_data_collator,
     CodeLlamaTokenizer,
+    GPTBigCodeForCausalLM,
+    GPTBigCodeConfig
 )
+from transformers import AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoModel,AutoConfig
 
 from transformers.models.llama.modeling_llama import LlamaDecoderLayer
+from transformers.models.gpt_bigcode.modeling_gpt_bigcode import GPTBigCodeModel
+
 
 from llama_recipes.configs import fsdp_config, train_config
 from llama_recipes.policies import AnyPrecisionAdamW, apply_fsdp_checkpointing
@@ -122,10 +128,9 @@ def main(**kwargs) -> None:
         now = now.strftime("%Y-%m-%d-%H-%M-%S")
         wandb_setting: dict = {
             "entity": "ontocord",
-            "project": "code-llama",
+            "project": "cbtm",
             "name": train_config.wandb_name,
             "config": wandb_configs,
-            "mode" : 'offline',
         }
         wandb.init(**wandb_setting)
 
@@ -143,46 +148,45 @@ def main(**kwargs) -> None:
         model alone would consume 2+TB cpu mem (70 * 4 * 8). This will add some communications
         overhead and currently requires latest nightly.
         """
-        v = packaging.version.parse(torch.__version__)
-        verify_latest_nightly = v.is_devrelease and v.dev >= 20230701
-        if not verify_latest_nightly:
-            raise Exception(
-                "latest pytorch nightly build is required to run with low_cpu_fsdp config, "
-                "please install latest nightly."
-            )
         if rank == 0:
-            model = LlamaForCausalLM.from_pretrained(
+            model = GPTBigCodeForCausalLM.from_pretrained(
                 train_config.model_name,
                 load_in_8bit=True if train_config.quantization else None,
                 device_map="auto" if train_config.quantization else None,
                 use_cache=use_cache,
+                torch_dtype=torch.bfloat16, 
+                attn_implementation="flash_attention_2"
             )
         else:
-            llama_config = LlamaConfig.from_pretrained(train_config.model_name)
-            llama_config.use_cache = use_cache
+            gptbigcode_config = GPTBigCodeConfig.from_pretrained(train_config.model_name)
+            gptbigcode_config.use_cache = use_cache
             with torch.device("meta"):
-                model = LlamaForCausalLM(llama_config)
+                model = GPTBigCodeForCausalLM(gptbigcode_config)
 
     else:
-        model = LlamaForCausalLM.from_pretrained(
+        model = GPTBigCodeForCausalLM.from_pretrained(
             train_config.model_name,
             load_in_8bit=True if train_config.quantization else None,
             device_map="auto" if train_config.quantization else None,
             use_cache=use_cache,
+            torch_dtype=torch.bfloat16, 
+            attn_implementation= "flash_attention_2",
         )
 
-    if train_config.enable_fsdp and train_config.use_fast_kernels:
+    # if train_config.enable_fsdp and train_config.use_fast_kernels:
         """
         For FSDP and FSDP+PEFT, setting 'use_fast_kernels' will enable
         using of Flash Attention or Xformer memory-efficient kernels
         based on the hardware being used. This would speed up fine-tuning.
         """
-        try:
-            from optimum.bettertransformer import BetterTransformer
+        # try:
+        #     print("model",model)
+        #     from optimum.bettertransformer import BetterTransformer
 
-            model = BetterTransformer.transform(model)  # type: ignore
-        except ImportError:
-            print("Module 'optimum' not found. Please install 'optimum' it before proceeding.")
+        #     # model = BetterTransformer.transform(model)  # type: ignore
+        #     # model = model.to_bettertransformer()
+        # except ImportError:
+        #     print("Module 'optimum' not found. Please install 'optimum' it before proceeding.")
     print_model_size(model, train_config, rank if train_config.enable_fsdp else 0)  # type: ignore
 
     # Prepare the model for int8 training if quantization is enabled
@@ -193,12 +197,8 @@ def main(**kwargs) -> None:
     if train_config.enable_fsdp and fsdp_config.pure_bf16:
         model.to(torch.bfloat16)  # type: ignore
 
-    # Load the tokenizer ABCIのLLMでは、paddingはしません
-    # hfならこれ
-    # tokenizer = LlamaTokenizer.from_pretrained(train_config.tokenizer_name)
-    tokenizer = CodeLlamaTokenizer.from_pretrained(train_config.tokenizer_name)
-    # tokenizer = spm.SentencePieceProcessor()
-    # tokenizer.Load(train_config.tokenizer_name)
+    tokenizer = AutoTokenizer.from_pretrained(train_config.tokenizer_name)
+
 
     if train_config.use_peft:
         print(f"Using PEFT method: {train_config.peft_method}", flush=True)
@@ -213,7 +213,7 @@ def main(**kwargs) -> None:
             freeze_transformer_layers(model=model, num_layer=train_config.num_freeze_layers)
 
         mixed_precision_policy, wrapping_policy = get_policies(fsdp_config, rank)
-        my_auto_wrapping_policy = fsdp_auto_wrap_policy(model, LlamaDecoderLayer)
+        my_auto_wrapping_policy = fsdp_auto_wrap_policy(model, GPTBigCodeModel)
 
         model = FSDP(
             model,  # type: ignore

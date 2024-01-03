@@ -7,7 +7,7 @@ from typing import Optional
 
 @dataclass
 class train_config:
-    model_name: str = ""
+    model_name: str = "GPTBigCodeModel"
     tokenizer_name: str = ""
     enable_fsdp: bool = False
     low_cpu_fsdp: bool = False

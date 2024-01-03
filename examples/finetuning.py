@@ -1,7 +1,7 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # This software may be used and distributed according to the terms of the Llama 2 Community License Agreement.
 import sys
-sys.path.append("/p/project/ccstdl/nakamura2/ABCI-llama-recipes/src")
+sys.path.append("/bb/llm/gaf51275/llm-jp/taishi-work-space/llama-recipes/src")
 
 import fire
 from llama_recipes.finetuning import main
