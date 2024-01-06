@@ -9,6 +9,8 @@ from torch.distributed.fsdp.wrap import (
     size_based_auto_wrap_policy,
 )
 
+from transformers.models.gpt_bigcode.modeling_gpt_bigcode import GPTBigCodeBlock
+
 
 def get_size_policy(min_params=1e8):
     num_wrap_policy = functools.partial(
@@ -31,3 +33,19 @@ def get_llama_wrapper():
     )
 
     return llama_auto_wrap_policy
+
+def get_gptbigcode_wrapper():
+    """we register our main layer class and use the fsdp transformer wrapping policy
+    ensures embedding layers are in the root fsdp unit for shared access and that fsdp units map to transformer layers
+    """
+    # ====   use new transformer wrapper
+    should_wrap = lambda module: isinstance(module, GPTBigCodeBlock)
+
+    gptbigcode_auto_wrap_policy = functools.partial(
+        transformer_auto_wrap_policy,
+        transformer_layer_cls={
+            GPTBigCodeBlock,
+        },
+    )
+
+    return gptbigcode_auto_wrap_policy

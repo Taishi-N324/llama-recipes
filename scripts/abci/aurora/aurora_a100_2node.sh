@@ -1,5 +1,5 @@
 #!/bin/bash
-#$ -l rt_AF=2
+#$ -l rt_AF=4
 #$ -l h_rt=1:00:00
 #$ -j y
 #$ -o outputs/
@@ -20,6 +20,10 @@ module load hpcx/2.12
 # distributed settings
 export MASTER_ADDR=$(/usr/sbin/ip a show dev bond0 | grep 'inet ' | awk '{ print $2 }' | cut -d "/" -f 1)
 export MASTER_PORT=$((10000 + ($JOB_ID % 50000)))
+
+export HF_HOME=/bb/llm/gaf51275/llm-jp/taishi-work-space/.cache
+export HF_DATASETS_CACHE=/bb/llm/gaf51275/llm-jp/taishi-work-space/.cache
+export TRANSFORMERS_CACHE=/bb/llm/gaf51275/llm-jp/taishi-work-space/.cachea
 
 echo "MASTER_ADDR=${MASTER_ADDR}"
 
@@ -95,12 +99,13 @@ mpirun -np $NUM_GPUS \
   python examples/finetuning.py \
   --enable_fsdp \
   --low_cpu_fsdp \
+  --fsdp_cpu_offload \
   --peft_method None \
   --mixed_precision \
   --pure_bf16 \
   --num_epochs $NUM_EPOCHS \
-  --model_name  aurora-m/Aurora-90k-hf \
-  --tokenizer_name aurora-m/Aurora-90k-hf  \
+  --model_name  aurora-m/Aurora-90k-16bit \
+  --tokenizer_name aurora-m/Aurora-90k-16bit \
   --batch_size_training $BATCH_SIZE \
   --gradient_accumulation_steps $GRADIENT_ACCUMULATION_STEPS \
   --lr $LR \
@@ -119,6 +124,7 @@ mpirun -np $NUM_GPUS \
   --save_checkpoint_path $CHECKPOINTS_PATH \
   --use_mpi \
   --use_fast_kernels \
-  --streaming_datasets_train_path  /bb/llm/gaf51275/llm-jp/taishi-work-space/llama-recipes/streaming/ja_wiki \
+  --streaming_datasets_train_path "/bb/llm/gaf51275/llm-jp/taishi-work-space/llama-recipes/streaming/ja_wiki" \
+  --streaming_datasets_val_path "/bb/llm/gaf51275/llm-jp/taishi-work-space/llama-recipes/streaming/ja_wiki_copy" \
   --wandb_name "aurora_${NODE_TYPE}_${NHOSTS}_FSDP_${NUM_GPUS}_GLOBAL_BATCH_SIZE_${GLOBAL_BATCH_SIZE}" \
   --estimated_total_iterations 17500

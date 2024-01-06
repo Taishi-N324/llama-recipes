@@ -33,7 +33,7 @@ from transformers import AutoTokenizer
 from transformers import AutoModelForCausalLM, AutoModel,AutoConfig
 
 from transformers.models.llama.modeling_llama import LlamaDecoderLayer
-from transformers.models.gpt_bigcode.modeling_gpt_bigcode import GPTBigCodeModel
+from transformers.models.gpt_bigcode.modeling_gpt_bigcode import GPTBigCodeModel, GPTBigCodeBlock
 
 
 from llama_recipes.configs import fsdp_config, train_config
@@ -150,43 +150,44 @@ def main(**kwargs) -> None:
         """
         if rank == 0:
             model = GPTBigCodeForCausalLM.from_pretrained(
+            # model = LlamaForCausalLM.from_pretrained(
                 train_config.model_name,
                 load_in_8bit=True if train_config.quantization else None,
                 device_map="auto" if train_config.quantization else None,
                 use_cache=use_cache,
-                torch_dtype=torch.bfloat16, 
-                attn_implementation="flash_attention_2"
             )
         else:
             gptbigcode_config = GPTBigCodeConfig.from_pretrained(train_config.model_name)
+            # llama_config = LlamaConfig.from_pretrained(train_config.model_name)
             gptbigcode_config.use_cache = use_cache
+            # llama_config.use_cache = use_cache
             with torch.device("meta"):
                 model = GPTBigCodeForCausalLM(gptbigcode_config)
+                # model = LlamaForCausalLM(llama_config)
 
     else:
         model = GPTBigCodeForCausalLM.from_pretrained(
+        # model = LlamaForCausalLM.from_pretrained(
             train_config.model_name,
             load_in_8bit=True if train_config.quantization else None,
             device_map="auto" if train_config.quantization else None,
             use_cache=use_cache,
-            torch_dtype=torch.bfloat16, 
-            attn_implementation= "flash_attention_2",
         )
 
     # if train_config.enable_fsdp and train_config.use_fast_kernels:
-        """
-        For FSDP and FSDP+PEFT, setting 'use_fast_kernels' will enable
-        using of Flash Attention or Xformer memory-efficient kernels
-        based on the hardware being used. This would speed up fine-tuning.
-        """
-        # try:
-        #     print("model",model)
-        #     from optimum.bettertransformer import BetterTransformer
+    #     """
+    #     For FSDP and FSDP+PEFT, setting 'use_fast_kernels' will enable
+    #     using of Flash Attention or Xformer memory-efficient kernels
+    #     based on the hardware being used. This would speed up fine-tuning.
+    #     """
+    #     try:
+    #         print("model",model)
+    #         from optimum.bettertransformer import BetterTransformer
 
-        #     # model = BetterTransformer.transform(model)  # type: ignore
-        #     # model = model.to_bettertransformer()
-        # except ImportError:
-        #     print("Module 'optimum' not found. Please install 'optimum' it before proceeding.")
+    #         model = BetterTransformer.transform(model)  # type: ignore
+    #         # model = model.to_bettertransformer()
+    #     except ImportError:
+    #         print("Module 'optimum' not found. Please install 'optimum' it before proceeding.")
     print_model_size(model, train_config, rank if train_config.enable_fsdp else 0)  # type: ignore
 
     # Prepare the model for int8 training if quantization is enabled
@@ -213,8 +214,10 @@ def main(**kwargs) -> None:
             freeze_transformer_layers(model=model, num_layer=train_config.num_freeze_layers)
 
         mixed_precision_policy, wrapping_policy = get_policies(fsdp_config, rank)
-        my_auto_wrapping_policy = fsdp_auto_wrap_policy(model, GPTBigCodeModel)
-
+        my_auto_wrapping_policy = fsdp_auto_wrap_policy(model, GPTBigCodeBlock)
+        # my_auto_wrapping_policy = fsdp_auto_wrap_policy(model, LlamaDecoderLayer)
+        print("fsdp_config.fsdp_cpu_offload",fsdp_config.fsdp_cpu_offload)
+        # print("model",model)
         model = FSDP(
             model,  # type: ignore
             auto_wrap_policy=my_auto_wrapping_policy if train_config.use_peft else wrapping_policy,
@@ -228,6 +231,8 @@ def main(**kwargs) -> None:
             if train_config.low_cpu_fsdp and rank != 0
             else None,
         )
+        print("------------------------------")
+        print("model",model)
         if fsdp_config.fsdp_activation_checkpointing:
             apply_fsdp_checkpointing(model)
     elif not train_config.quantization and not train_config.enable_fsdp:

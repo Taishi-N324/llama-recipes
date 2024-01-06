@@ -22,7 +22,7 @@ from llama_recipes.configs.training import train_config
 
 from llama_recipes.model_checkpointing import save_checkpoint
 from llama_recipes.model_checkpointing.checkpoint_handler import load_model_sharded
-from llama_recipes.policies import fpSixteen, bfSixteen_mixed, get_llama_wrapper
+from llama_recipes.policies import fpSixteen, bfSixteen_mixed, get_llama_wrapper, get_gptbigcode_wrapper
 from llama_recipes.utils.memory_utils import MemoryTrace
 
 from typing import Optional, Type, Any
@@ -652,7 +652,8 @@ def get_policies(cfg, rank):
                 print("FP16 enabled")
         else:
             print("bFloat16 support not present. Using FP32, and not mixed precision")
-    wrapping_policy = get_llama_wrapper()
+    # wrapping_policy = get_llama_wrapper()
+    wrapping_policy = get_gptbigcode_wrapper()
     return mixed_precision_policy, wrapping_policy
 
 
