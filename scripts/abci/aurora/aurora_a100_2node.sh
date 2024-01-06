@@ -98,8 +98,6 @@ mpirun -np $NUM_GPUS \
   -x PATH \
   python examples/finetuning.py \
   --enable_fsdp \
-  --low_cpu_fsdp \
-  --fsdp_cpu_offload \
   --peft_method None \
   --mixed_precision \
   --pure_bf16 \

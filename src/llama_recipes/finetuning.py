@@ -141,38 +141,38 @@ def main(**kwargs) -> None:
 
     # Load the pre-trained model and setup its configuration
     use_cache = False if train_config.enable_fsdp else None
-    if train_config.enable_fsdp and train_config.low_cpu_fsdp:
-        """
-        for FSDP, we can save cpu memory by loading pretrained model on rank0 only.
-        this avoids cpu oom when loading large models like llama 70B, in which case
-        model alone would consume 2+TB cpu mem (70 * 4 * 8). This will add some communications
-        overhead and currently requires latest nightly.
-        """
-        if rank == 0:
-            model = GPTBigCodeForCausalLM.from_pretrained(
-            # model = LlamaForCausalLM.from_pretrained(
-                train_config.model_name,
-                load_in_8bit=True if train_config.quantization else None,
-                device_map="auto" if train_config.quantization else None,
-                use_cache=use_cache,
-            )
-        else:
-            gptbigcode_config = GPTBigCodeConfig.from_pretrained(train_config.model_name)
-            # llama_config = LlamaConfig.from_pretrained(train_config.model_name)
-            gptbigcode_config.use_cache = use_cache
-            # llama_config.use_cache = use_cache
-            with torch.device("meta"):
-                model = GPTBigCodeForCausalLM(gptbigcode_config)
-                # model = LlamaForCausalLM(llama_config)
+    # if train_config.enable_fsdp and train_config.low_cpu_fsdp:
+    #     """
+    #     for FSDP, we can save cpu memory by loading pretrained model on rank0 only.
+    #     this avoids cpu oom when loading large models like llama 70B, in which case
+    #     model alone would consume 2+TB cpu mem (70 * 4 * 8). This will add some communications
+    #     overhead and currently requires latest nightly.
+    #     """
+        # if rank == 0:
+        #     model = GPTBigCodeForCausalLM.from_pretrained(
+        #     # model = LlamaForCausalLM.from_pretrained(
+        #         train_config.model_name,
+        #         load_in_8bit=True if train_config.quantization else None,
+        #         device_map="auto" if train_config.quantization else None,
+        #         use_cache=use_cache,
+        #     )
+        # else:
+    # false
+    # gptbigcode_config = GPTBigCodeConfig.from_pretrained(train_config.model_name)
+    # gptbigcode_config.attention_softmax_in_fp32 = False
+    # gptbigcode_config.scale_attention_softmax_in_fp32 = False
+    # gptbigcode_config.use_cache = use_cache
+    # gptbigcode_config._attn_implementation = "GPTBigCodeFlashAttention2"
 
-    else:
-        model = GPTBigCodeForCausalLM.from_pretrained(
-        # model = LlamaForCausalLM.from_pretrained(
-            train_config.model_name,
-            load_in_8bit=True if train_config.quantization else None,
-            device_map="auto" if train_config.quantization else None,
-            use_cache=use_cache,
-        )
+
+    model = GPTBigCodeForCausalLM.from_pretrained(
+        train_config.model_name,
+        load_in_8bit=True if train_config.quantization else None,
+        device_map="auto" if train_config.quantization else None,
+        use_cache=use_cache,
+        torch_dtype='auto',
+        use_flash_attention_2=True,
+    )
 
     # if train_config.enable_fsdp and train_config.use_fast_kernels:
     #     """
@@ -197,6 +197,8 @@ def main(**kwargs) -> None:
     # Convert the model to bfloat16 if fsdp and pure_bf16 is enabled
     if train_config.enable_fsdp and fsdp_config.pure_bf16:
         model.to(torch.bfloat16)  # type: ignore
+    
+
 
     tokenizer = AutoTokenizer.from_pretrained(train_config.tokenizer_name)
 

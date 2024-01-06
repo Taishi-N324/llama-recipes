@@ -100,14 +100,28 @@ def train(
     # set model info
     if rank == 0 and train_config.wandb_name:
         model_config: dict[str, Any] = {}
+        '''
+        llama
         model_config["activation_function"] = model.config.hidden_act
         model_config["hidden_size"] = model.config.hidden_size
-        model_config["model_type"] = model.config.model_type
+        model_config["model_type"] = model.config.model_type 
         model_config["max_position_embeddings"] = model.config.max_position_embeddings
         model_config["num_attention_heads"] = model.config.num_attention_heads
         model_config["num_hidden_layers"] = model.config.num_hidden_layers
         model_config["vocab_size"] = model.config.vocab_size
         model_config["model_architecture"] = model.config.architectures[0]
+        '''
+
+        # gpt_bigcode
+        model_config["activation_function"] = model.config.activation_function
+        model_config["hidden_size"] = model.config.n_embd
+        model_config["model_type"] = model.config.model_type 
+        model_config["max_position_embeddings"] = model.config.n_positions
+        model_config["num_attention_heads"] = model.config.n_head
+        model_config["num_hidden_layers"] = model.config.n_layer
+        model_config["vocab_size"] = model.config.vocab_size
+        model_config["model_architecture"] = model.config.architectures[0]
+
 
         print(f"model info: {model}")
         print(f"model config: {model.config}")
