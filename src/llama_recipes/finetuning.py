@@ -165,13 +165,21 @@ def main(**kwargs) -> None:
     # gptbigcode_config._attn_implementation = "GPTBigCodeFlashAttention2"
 
 
+    # model = GPTBigCodeForCausalLM.from_pretrained(
+    #     train_config.model_name,
+    #     load_in_8bit=True if train_config.quantization else None,
+    #     device_map="auto" if train_config.quantization else None,
+    #     use_cache=use_cache,
+    #     torch_dtype='auto',
+    #     use_flash_attention_2=True,
+    # )
     model = GPTBigCodeForCausalLM.from_pretrained(
         train_config.model_name,
         load_in_8bit=True if train_config.quantization else None,
         device_map="auto" if train_config.quantization else None,
         use_cache=use_cache,
-        torch_dtype='auto',
-        use_flash_attention_2=True,
+        torch_dtype=torch.bfloat16,  # または torch.bfloat16
+        attn_implementation="flash_attention_2",
     )
 
     # if train_config.enable_fsdp and train_config.use_fast_kernels:
